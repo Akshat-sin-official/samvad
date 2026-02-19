@@ -61,8 +61,10 @@ export interface GenerateResponse {
     gaps: GapAnalysis;
     data_model: DataModel;
     compliance: Compliance;
-    architecture: Architecture;
-    metadata: {
+    /** Optional until backend implements architecture agent. */
+    architecture?: Architecture;
+    /** Optional until backend returns inference metadata. */
+    metadata?: {
         confidence_score: number;
         tokens_used: number;
         models_consulted: string[];
