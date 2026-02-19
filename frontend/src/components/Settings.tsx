@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { User, Lock, Bell, CreditCard, Palette } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { User, Lock, Bell, CreditCard, Palette, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
+import { fetchCurrentUser, updateUserSettings } from '../api/client';
+import { useAuth } from '../auth';
 
 type SettingsSection = 'profile' | 'security' | 'notifications' | 'billing' | 'appearance';
 
@@ -13,7 +15,54 @@ const sections: { id: SettingsSection; label: string; icon: typeof User }[] = [
 ];
 
 export function Settings() {
+  const { signOutUser } = useAuth();
   const [active, setActive] = useState<SettingsSection>('profile');
+  const [displayName, setDisplayName] = useState('John Doe');
+  const [email, setEmail] = useState('john@samvad.ai');
+  const [bio, setBio] = useState('Senior Software Architect focused on scalable systems.');
+  const [theme, setTheme] = useState<'Light' | 'Dark' | 'System'>('Light');
+  const [notifications, setNotifications] = useState<Record<string, boolean>>({
+    brdComplete: true,
+    teamInvites: true,
+    weeklyDigest: true,
+  });
+
+  const handleSignOut = async () => {
+    try {
+      await signOutUser();
+      // User will be redirected to login modal via auth state change
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const me = await fetchCurrentUser();
+        setDisplayName(me.displayName || displayName);
+        setEmail(me.email || email);
+        const settings = me.settings || {};
+        setBio(settings.bio || bio);
+        setTheme((settings.appearance as 'Light' | 'Dark' | 'System') || 'Light');
+        setNotifications(settings.notifications || notifications);
+      } catch (e) {
+        // Best-effort for hackathon; fall back to defaults
+        console.warn('Failed to load user profile', e);
+      }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistSettings = async () => {
+    await updateUserSettings({
+      displayName,
+      bio,
+      appearance: theme,
+      notifications,
+    });
+  };
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -49,7 +98,7 @@ export function Settings() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-xl font-bold text-slate-500">
-                      JD
+                      {displayName ? displayName[0] : 'U'}
                     </div>
                     <Button variant="outline" size="sm">
                       Change avatar
@@ -59,7 +108,8 @@ export function Settings() {
                     <label className="text-sm font-medium text-slate-700">Display name</label>
                     <input
                       type="text"
-                      defaultValue="John Doe"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
                       className="h-10 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
@@ -67,7 +117,8 @@ export function Settings() {
                     <label className="text-sm font-medium text-slate-700">Email</label>
                     <input
                       type="email"
-                      defaultValue="john@samvad.ai"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="h-10 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
@@ -75,7 +126,8 @@ export function Settings() {
                     <label className="text-sm font-medium text-slate-700">Bio</label>
                     <textarea
                       rows={3}
-                      defaultValue="Senior Software Architect focused on scalable systems."
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
@@ -83,7 +135,7 @@ export function Settings() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline">Cancel</Button>
-                <Button className="bg-indigo-600 hover:bg-indigo-700">Save changes</Button>
+                <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={persistSettings}>Save changes</Button>
               </div>
             </div>
           )}
@@ -126,6 +178,19 @@ export function Settings() {
                   Enable 2FA
                 </Button>
               </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-900 mb-2">Sign out</h2>
+                <p className="text-sm text-slate-500 mb-4">Sign out of your account on this device.</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline">Cancel</Button>
                 <Button className="bg-indigo-600 hover:bg-indigo-700">Update password</Button>
@@ -139,22 +204,32 @@ export function Settings() {
                 <h2 className="text-lg font-semibold text-slate-900 mb-4">Email notifications</h2>
                 <div className="space-y-4">
                   {[
-                    { label: 'BRD generation complete', desc: 'When a new spec is ready' },
-                    { label: 'Team invites', desc: 'When someone invites you to a workspace' },
-                    { label: 'Weekly digest', desc: 'Summary of activity' },
+                    { key: 'brdComplete', label: 'BRD generation complete', desc: 'When a new spec is ready' },
+                    { key: 'teamInvites', label: 'Team invites', desc: 'When someone invites you to a workspace' },
+                    { key: 'weeklyDigest', label: 'Weekly digest', desc: 'Summary of activity' },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-2">
                       <div>
                         <p className="text-sm font-medium text-slate-900">{item.label}</p>
                         <p className="text-xs text-slate-500">{item.desc}</p>
                       </div>
-                      <input type="checkbox" defaultChecked className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <input
+                        type="checkbox"
+                        checked={notifications[item.key as keyof typeof notifications] ?? true}
+                        onChange={(e) =>
+                          setNotifications({
+                            ...notifications,
+                            [item.key]: e.target.checked,
+                          })
+                        }
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
                     </div>
                   ))}
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button className="bg-indigo-600 hover:bg-indigo-700">Save preferences</Button>
+                <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={persistSettings}>Save preferences</Button>
               </div>
             </div>
           )}
@@ -203,6 +278,7 @@ export function Settings() {
                           ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
+                      onClick={() => setTheme(theme as 'Light' | 'Dark' | 'System')}
                     >
                       {theme}
                     </button>
@@ -210,7 +286,7 @@ export function Settings() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
+                <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={persistSettings}>Save</Button>
               </div>
             </div>
           )}

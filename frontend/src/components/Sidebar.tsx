@@ -136,10 +136,13 @@ const LibraryDropdown = ({
   );
 };
 
+import type { User } from 'firebase/auth';
+
 export interface SidebarProps {
   activeTab: string;
   setActiveTab: (t: string) => void;
   isLoggedIn: boolean;
+  user: User | null;
   onLoginClick: () => void;
   onOpenSearch: () => void;
   brds: BRDListItem[];
@@ -149,6 +152,7 @@ export function Sidebar({
   activeTab,
   setActiveTab,
   isLoggedIn,
+  user,
   onLoginClick,
   onOpenSearch,
   brds,
@@ -216,14 +220,26 @@ export function Sidebar({
           />
         </div>
         <div className="p-3 pt-0">
-          {isLoggedIn ? (
+          {isLoggedIn && user ? (
             <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-              <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                JD
-              </div>
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || user.email || 'User'}
+                  className="w-9 h-9 rounded-full shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                  {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-white truncate">John Doe</div>
-                <div className="text-xs text-slate-500 truncate">Enterprise</div>
+                <div className="text-sm font-medium text-white truncate">
+                  {user.displayName || user.email || 'User'}
+                </div>
+                <div className="text-xs text-slate-500 truncate">
+                  {user.email || 'Signed in'}
+                </div>
               </div>
             </div>
           ) : (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BRDView } from './components/BRDView';
 import { GapView } from './components/GapView';
 import { DataModelView } from './components/DataModelView';
@@ -18,27 +18,29 @@ import {
   FileText, Database, ShieldAlert,
 } from 'lucide-react';
 import type { BRD, GapAnalysis, DataModel, Compliance, Architecture, GenerateResponse } from './types';
-import { generateBRD } from './api/client';
-import mockData from './mock_data.json';
+import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter } from './api/client';
 import { SearchBRDPopup } from './components/SearchBRDPopup';
 import type { BRDListItem } from './components/SearchBRDPopup';
-
-/** Single source of truth for BRD library (sidebar + search popup). */
-const BRDS_LIBRARY: BRDListItem[] = [
-  { id: 'brd-1', name: 'E-Commerce Microservices', updated: '2h ago', description: 'Scalable backend for multi-vendor marketplace' },
-  { id: 'brd-2', name: 'Healthcare CRM', updated: '5h ago', description: 'Patient management system with HIPAA compliance' },
-  { id: 'brd-3', name: 'FinTech Payment Gateway', updated: '1d ago', description: 'Secure transaction processing layer' },
-  { id: 'brd-4', name: 'Logistics Tracker', updated: '2d ago', description: 'Real-time fleet tracking and optimization' },
-  { id: 'brd-5', name: 'Social Media Analytics', updated: '1w ago', description: 'Big data processing pipeline for engagement metrics' },
-];
+import { useAuth } from './auth';
 
 // --- Login Modal Component ---
-const LoginModal = ({ onLogin, onClose }: { onLogin: () => void, onClose: () => void }) => (
+const LoginModal = ({ 
+  onLogin, 
+  onSignUp, 
+  onClose, 
+  isLoading 
+}: { 
+  onLogin: () => void; 
+  onSignUp: () => void; 
+  onClose: () => void;
+  isLoading?: boolean;
+}) => (
   <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors z-10"
+        disabled={isLoading}
+        className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors z-10 disabled:opacity-50"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -51,18 +53,51 @@ const LoginModal = ({ onLogin, onClose }: { onLogin: () => void, onClose: () => 
         </div>
 
         <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Samvad<span className="text-indigo-600">.ai</span></h1>
-        <p className="text-slate-500 mb-8 max-w-xs mx-auto">Sign in to save your work and access advanced features.</p>
+        <p className="text-slate-500 mb-8 max-w-xs mx-auto">Sign in with Google to save your work and access advanced features.</p>
+
+        {isLoading && (
+          <div className="mb-4 flex items-center justify-center gap-2 text-indigo-600">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Redirecting to Google...</span>
+          </div>
+        )}
 
         <div className="space-y-4">
-          <Button size="lg" className="w-full bg-indigo-600 hover:bg-indigo-700 text-lg h-12 shadow-md shadow-indigo-500/20" onClick={onLogin}>
-            Log In
+          <Button 
+            size="lg" 
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-lg h-12 shadow-md shadow-indigo-500/20" 
+            onClick={onLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Signing in...
+              </>
+            ) : (
+              'Log In with Google'
+            )}
           </Button>
-          <Button size="lg" variant="outline" className="w-full text-lg h-12 border-slate-200 hover:bg-slate-50 hover:text-slate-900">
-            Sign Up
+          <Button 
+            size="lg" 
+            variant="outline" 
+            className="w-full text-lg h-12 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+            onClick={onSignUp}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Signing up...
+              </>
+            ) : (
+              'Sign Up with Google'
+            )}
           </Button>
           <button
             onClick={onClose}
-            className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors py-2"
+            disabled={isLoading}
+            className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors py-2 disabled:opacity-50"
           >
             Continue as Guest
           </button>
@@ -80,7 +115,7 @@ const LoginModal = ({ onLogin, onClose }: { onLogin: () => void, onClose: () => 
         </div>
       </div>
       <div className="bg-slate-50 p-4 text-center text-xs text-slate-400 border-t border-slate-100">
-        &copy; 2024 Samvad AI Inc. All rights reserved.
+        &copy; 2026 Samvad.ai . All rights reserved.
       </div>
     </div>
   </div>
@@ -105,42 +140,74 @@ const TransparencyFooter = ({ metadata }: { metadata?: GenerateResponse['metadat
 }
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(true);
+  const { user, loading: authLoading, signInWithGoogle, signUpWithGoogle } = useAuth();
+  const isLoggedIn = !!user;
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
   const [activeTab, setActiveTab] = useState('new_project'); // Default to generator for now, can be 'dashboard'
   const [idea, setIdea] = useState('');
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  // Demo loading
-  const handleLoadDemo = () => {
-    setLoading(true);
-    setTimeout(() => {
-      const demoResult: GenerateResponse = {
-        brd: mockData[0] as unknown as BRD,
-        gaps: mockData[1] as unknown as GapAnalysis,
-        data_model: mockData[2] as unknown as DataModel,
-        compliance: mockData[3] as unknown as Compliance,
-        architecture: mockData[4] as unknown as Architecture,
-        metadata: mockData[5] as unknown as GenerateResponse['metadata']
-      };
-      setResult(demoResult);
-      setIdea(mockData[0].problem_statement || '');
-      setLoading(false);
-    }, 1200);
-  };
+  // Show login modal if not authenticated and auth has finished loading
+  useEffect(() => {
+    if (!authLoading && !isLoggedIn) {
+      setShowLoginModal(true);
+    } else if (isLoggedIn) {
+      setShowLoginModal(false);
+      setIsAuthRedirecting(false);
+      // Redirect to projects tab after successful login
+      if (activeTab === 'new_project' && projects.length > 0) {
+        setActiveTab('projects');
+      } else if (activeTab === 'new_project') {
+        setActiveTab('projects');
+      }
+    }
+  }, [authLoading, isLoggedIn, activeTab, projects.length]);
+
+  useEffect(() => {
+    setAuthTokenGetter(async () => {
+      if (!user) return null;
+      return await user.getIdToken();
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setProjects([]);
+      return;
+    }
+    const load = async () => {
+      try {
+        const list = await fetchProjects();
+        setProjects(list);
+      } catch (e) {
+        console.error('Failed to load projects', e);
+      }
+    };
+    load();
+  }, [isLoggedIn]);
 
   const handleSubmit = async () => {
     if (!idea.trim()) return;
+    if (!isLoggedIn) {
+      setError('Please log in with Google to generate and save projects.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const data = await generateBRD(idea);
-      setResult(data);
+      const { project_id, artifacts } = await generateBRD({ idea });
+      setResult(artifacts);
+      setSelectedProjectId(project_id);
+      const list = await fetchProjects();
+      setProjects(list);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'An unexpected error occurred.');
     } finally {
@@ -148,20 +215,64 @@ function App() {
     }
   }
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    setShowLoginModal(false);
-    setActiveTab('projects'); // Redirect to projects on login
+  const handleLogin = async () => {
+    try {
+      setIsAuthRedirecting(true);
+      await signInWithGoogle();
+      // Note: signInWithRedirect will navigate away, so code below won't execute
+      // The redirect result will be handled in auth.tsx
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setIsAuthRedirecting(false);
+      setError('Failed to sign in. Please try again.');
+    }
+  };
+
+  const handleSignUp = async () => {
+    try {
+      setIsAuthRedirecting(true);
+      await signUpWithGoogle();
+      // Note: signInWithRedirect will navigate away, so code below won't execute
+      // The redirect result will be handled in auth.tsx
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      setIsAuthRedirecting(false);
+      setError('Failed to sign up. Please try again.');
+    }
   };
 
   const handleCloseModal = () => {
-    setShowLoginModal(false);
+    if (!isAuthRedirecting) {
+      setShowLoginModal(false);
+    }
+  };
+
+  const handleSelectProject = async (id: string) => {
+    setActiveTab('new_project');
+    setSelectedProjectId(id);
+    try {
+      const full = await fetchProjectById(id);
+      setIdea(full.idea || '');
+      setResult(full.artifacts as GenerateResponse);
+    } catch (e) {
+      console.error('Failed to load project', e);
+    }
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'projects':
-        return <ProjectsList onNewProject={() => setActiveTab('new_project')} />;
+        return (
+          <ProjectsList
+            projects={projects}
+            onNewProject={() => {
+              setActiveTab('new_project');
+              setResult(null);
+              setIdea('');
+            }}
+            onOpenProject={handleSelectProject}
+          />
+        );
       case 'settings':
         return <Settings />;
       case 'brd-1':
@@ -169,7 +280,7 @@ function App() {
       case 'brd-3':
       case 'brd-4':
       case 'brd-5': {
-        const spec = BRDS_LIBRARY.find((b) => b.id === activeTab) ?? null;
+        const spec = null;
         return (
           <BRDDetailView
             spec={spec}
@@ -196,7 +307,17 @@ function App() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button variant="outline" size="sm" className="h-8 gap-2" onClick={handleLoadDemo}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  onClick={async () => {
+                    const demoIdea = 'Freelance designer marketplace with escrow payments and dispute resolution.';
+                    setIdea(demoIdea);
+                    await handleSubmit();
+                  }}
+                  disabled={loading}
+                >
                   <PlayCircle className="w-3.5 h-3.5" /> Demo
                 </Button>
                 <div className="h-4 w-px bg-slate-200 mx-1"></div>
@@ -378,14 +499,26 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      {showLoginModal && <LoginModal onLogin={handleLogin} onClose={handleCloseModal} />}
+      {!authLoading && !isLoggedIn && showLoginModal && (
+        <LoginModal 
+          onLogin={handleLogin} 
+          onSignUp={handleSignUp}
+          onClose={handleCloseModal}
+          isLoading={isAuthRedirecting}
+        />
+      )}
 
       <SearchBRDPopup
         open={searchPopupOpen}
         onClose={() => setSearchPopupOpen(false)}
-        items={BRDS_LIBRARY}
+        items={projects.map<BRDListItem>((p) => ({
+          id: p.id,
+          name: p.name,
+          updated: p.updatedAt,
+          description: p.description,
+        }))}
         onSelectItem={(id) => {
-          setActiveTab(id);
+          handleSelectProject(id);
           setSearchPopupOpen(false);
         }}
       />
@@ -394,9 +527,15 @@ function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isLoggedIn={isLoggedIn}
+        user={user}
         onLoginClick={() => setShowLoginModal(true)}
         onOpenSearch={() => setSearchPopupOpen(true)}
-        brds={BRDS_LIBRARY}
+        brds={projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          updated: p.updatedAt,
+          description: p.description,
+        }))}
       />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
