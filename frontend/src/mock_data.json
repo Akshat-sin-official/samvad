@@ -134,7 +134,7 @@
           }
         ]
       },
-       {
+      {
         "entity_name": "Transaction",
         "fields": [
           {
@@ -149,7 +149,7 @@
             "description": "Transaction amount.",
             "sensitivity": "Confidential"
           },
-           {
+          {
             "field_name": "stripe_payment_id",
             "type": "VARCHAR",
             "description": "Reference ID from payment processor.",
@@ -185,5 +185,63 @@
       "Restrict database access to specific IP ranges (allowlist).",
       "Require Multi-Factor Authentication (MFA) for Admin console access."
     ]
+  },
+  {
+    "diagram_mermaid": "graph TD;\n  Client[Client App] -->|HTTP/JSON| API[API Gateway];\n  API -->|gRPC| Auth[Auth Service];\n  API -->|gRPC| Project[Project Service];\n  API -->|gRPC| Payment[Payment Service];\n  Project -->|SQL| DB[(PostgreSQL)];\n  Payment -->|HTTPS| Stripe[Stripe API];\n  Auth -->|Redis| Cache[(Redis)];",
+    "microservices": [
+      {
+        "name": "Auth Service",
+        "description": "Handles OIDC authentication and session management",
+        "tech_stack": [
+          "Node.js",
+          "Passport.js",
+          "Redis"
+        ]
+      },
+      {
+        "name": "Project Core",
+        "description": "Manages portfolio listings and search index",
+        "tech_stack": [
+          "Go",
+          "Elasticsearch",
+          "PostgreSQL"
+        ]
+      },
+      {
+        "name": "Escrow Engine",
+        "description": "Payment logic and dispute state machine",
+        "tech_stack": [
+          "Rust",
+          "Temporal.io"
+        ]
+      }
+    ],
+    "cloud_infrastructure": [
+      {
+        "resource": "ECS Fargate",
+        "type": "Compute",
+        "justification": "Serverless container orchestration for scalability"
+      },
+      {
+        "resource": "Aurora Serverless",
+        "type": "Database",
+        "justification": "Auto-scaling relational database"
+      },
+      {
+        "resource": "S3 Standard",
+        "type": "Storage",
+        "justification": "Portfolio asset storage"
+      }
+    ]
+  },
+  {
+    "confidence_score": 0.94,
+    "tokens_used": 14520,
+    "models_consulted": [
+      "GPT-4o",
+      "Claude-3.5-Sonnet",
+      "Compliance-BERT"
+    ],
+    "processing_time_ms": 4200
   }
 ]

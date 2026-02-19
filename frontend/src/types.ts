@@ -42,9 +42,30 @@ export interface Compliance {
     access_control_recommendations: string[];
 }
 
+export interface Architecture {
+    diagram_mermaid: string;
+    microservices: {
+        name: string;
+        description: string;
+        tech_stack: string[];
+    }[];
+    cloud_infrastructure: {
+        resource: string;
+        type: string;
+        justification: string;
+    }[];
+}
+
 export interface GenerateResponse {
     brd: BRD;
     gaps: GapAnalysis;
     data_model: DataModel;
     compliance: Compliance;
+    architecture: Architecture;
+    metadata: {
+        confidence_score: number;
+        tokens_used: number;
+        models_consulted: string[];
+        processing_time_ms: number;
+    };
 }
