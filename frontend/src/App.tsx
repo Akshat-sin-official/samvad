@@ -4,7 +4,6 @@ import { GapView } from './components/GapView';
 import { DataModelView } from './components/DataModelView';
 import { ComplianceView } from './components/ComplianceView';
 import { ArchitectureView } from './components/ArchitectureView';
-import { Dashboard } from './components/Dashboard';
 import { ProjectsList } from './components/ProjectsList';
 import { Team } from './components/Team';
 import { System } from './components/System';
@@ -15,117 +14,222 @@ import { Textarea } from './components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import {
   Loader2, Sparkles, CheckCircle2, PlayCircle,
-  LayoutGrid, FolderGit2, Users, Bell,
+  LayoutGrid, FolderGit2, Bell,
   Share2, ChevronRight, BrainCircuit, Server,
   FileText, Database, ShieldAlert,
   Settings as SettingsIcon,
-  Activity
+  Search, ChevronDown, Plus
 } from 'lucide-react';
 import type { BRD, GapAnalysis, DataModel, Compliance, Architecture, GenerateResponse } from './types';
 import { generateBRD } from './api/client';
 import mockData from './mock_data.json';
+import { SearchBRDPopup } from './components/SearchBRDPopup';
+import type { BRDListItem } from './components/SearchBRDPopup';
+
+/** Single source of truth for BRD library (sidebar + search popup). */
+const BRDS_LIBRARY: BRDListItem[] = [
+  { id: 'brd-1', name: 'E-Commerce Microservices', updated: '2h ago', description: 'Scalable backend for multi-vendor marketplace' },
+  { id: 'brd-2', name: 'Healthcare CRM', updated: '5h ago', description: 'Patient management system with HIPAA compliance' },
+  { id: 'brd-3', name: 'FinTech Payment Gateway', updated: '1d ago', description: 'Secure transaction processing layer' },
+  { id: 'brd-4', name: 'Logistics Tracker', updated: '2d ago', description: 'Real-time fleet tracking and optimization' },
+  { id: 'brd-5', name: 'Social Media Analytics', updated: '1w ago', description: 'Big data processing pipeline for engagement metrics' },
+];
+
+// --- Sidebar nav item: explicit dark-theme colors so text is always visible (no ghost accent) ---
+const NavItem = ({
+  isActive,
+  onClick,
+  disabled,
+  icon: Icon,
+  label,
+  className = '',
+}: {
+  isActive: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  icon: React.ElementType;
+  label: string;
+  className?: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`
+      w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium
+      transition-colors duration-150 ease-out
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]
+      disabled:opacity-50 disabled:cursor-not-allowed
+      ${isActive
+        ? 'bg-slate-700/80 text-white'
+        : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+      }
+      ${className}
+    `}
+  >
+    <Icon className="w-4 h-4 shrink-0 opacity-90" />
+    <span className="truncate">{label}</span>
+  </button>
+);
+
+// --- Library Dropdown Component ---
+const LibraryDropdown = ({
+  activeTab,
+  setActiveTab,
+  isLoggedIn,
+  brds,
+}: {
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  isLoggedIn: boolean;
+  brds: BRDListItem[];
+}) => {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        type="button"
+        onClick={() => isLoggedIn && setIsOpen((o) => !o)}
+        disabled={!isLoggedIn}
+        className={`
+          w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-medium
+          transition-colors duration-150 ease-out
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]
+          ${isOpen ? 'bg-slate-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'}
+          disabled:opacity-50 disabled:cursor-not-allowed
+        `}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <LayoutGrid className="w-4 h-4 shrink-0 opacity-90" />
+          <span className="truncate">Dashboard</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="ml-3 pl-3 border-l border-slate-700/80 space-y-0.5">
+          {brds.map((brd) => {
+            const active = activeTab === brd.id;
+            return (
+              <button
+                key={brd.id}
+                type="button"
+                onClick={() => isLoggedIn && setActiveTab(brd.id)}
+                disabled={!isLoggedIn}
+                className={`
+                  w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-left text-xs
+                  transition-colors duration-150 ease-out
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  ${active
+                    ? 'bg-slate-700/80 text-white'
+                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                  }
+                `}
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                <span className="truncate flex-1 font-medium">{brd.name}</span>
+                <span className={`shrink-0 text-[10px] ${active ? 'text-slate-400' : 'text-slate-500'}`}>{brd.updated}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- Sidebar Component ---
-const Sidebar = ({ activeTab, setActiveTab, isLoggedIn, onLoginClick }: {
-  activeTab: string,
-  setActiveTab: (t: string) => void,
-  isLoggedIn: boolean,
-  onLoginClick: () => void
+const Sidebar = ({
+  activeTab,
+  setActiveTab,
+  isLoggedIn,
+  onLoginClick,
+  onOpenSearch,
+  brds,
+}: {
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  isLoggedIn: boolean;
+  onLoginClick: () => void;
+  onOpenSearch: () => void;
+  brds: BRDListItem[];
 }) => (
-  <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen border-r border-slate-800 shrink-0 select-none">
-    <div className="p-6 flex items-center gap-3">
-      <div className="bg-indigo-600 p-2 rounded-lg">
-        <Sparkles className="w-5 h-5 text-white" />
+  <aside className="w-64 flex flex-col h-screen bg-[#0f172a] border-r border-slate-800/90 shrink-0 select-none">
+    {/* Logo */}
+    <div className="h-14 shrink-0 flex items-center gap-3 px-4 border-b border-slate-800/90">
+      <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 text-white">
+        <Sparkles className="w-5 h-5" />
       </div>
-      <span className="font-bold text-xl text-white tracking-tight">Samvad<span className="text-indigo-400">.ai</span></span>
+      <span className="font-semibold text-lg text-white tracking-tight">Samvad<span className="text-indigo-400">.ai</span></span>
     </div>
 
     {!isLoggedIn && (
-      <div className="mx-4 mb-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-        <p className="text-xs text-slate-400 mb-3">You're using <span className="text-white font-semibold">Guest Mode</span>. Your work won't be saved.</p>
-        <Button
-          size="sm"
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-xs h-8"
+      <div className="mx-3 mt-3 p-3 rounded-lg bg-slate-800/60 border border-slate-700/80">
+        <p className="text-xs text-slate-400 mb-2">You're in <span className="text-slate-200 font-medium">Guest Mode</span>. Work isn't saved.</p>
+        <button
+          type="button"
           onClick={onLoginClick}
+          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
         >
-          Log In to Save
-        </Button>
+          Log in to save
+        </button>
       </div>
     )}
 
-    <div className="px-4 space-y-1">
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${activeTab === 'dashboard' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'} ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-        onClick={() => isLoggedIn && setActiveTab('dashboard')}
+    {/* Main nav */}
+    <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+      <div className="pt-0">
+        <LibraryDropdown activeTab={activeTab} setActiveTab={setActiveTab} isLoggedIn={isLoggedIn} brds={brds} />
+      </div>
+      <NavItem
+        isActive={false}
+        onClick={() => isLoggedIn && onOpenSearch()}
         disabled={!isLoggedIn}
-      >
-        <LayoutGrid className="w-4 h-4" /> Dashboard
-      </Button>
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${(activeTab === 'projects' || activeTab === 'new_project') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'} ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-        onClick={() => isLoggedIn && setActiveTab('projects')}
-        disabled={!isLoggedIn}
-      >
-        <FolderGit2 className="w-4 h-4" /> Projects
-      </Button>
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${activeTab === 'team' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'} ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-        onClick={() => isLoggedIn && setActiveTab('team')}
-        disabled={!isLoggedIn}
-      >
-        <Users className="w-4 h-4" /> Team
-      </Button>
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${activeTab === 'system' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'} ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-        onClick={() => isLoggedIn && setActiveTab('system')}
-        disabled={!isLoggedIn}
-      >
-        <Activity className="w-4 h-4" /> System
-      </Button>
+        icon={Search}
+        label="Search BRDs"
+      />
+      <NavItem
+        isActive={activeTab === 'new_project'}
+        onClick={() => setActiveTab('new_project')}
+        icon={Plus}
+        label="New Project"
+      />
+    </nav>
 
-      <div className="pt-4 pb-2 px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Configuration</div>
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${activeTab === 'models' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'}`}
-        onClick={() => setActiveTab('models')}
-      >
-        <BrainCircuit className="w-4 h-4" /> Models
-      </Button>
-      <Button
-        variant="ghost"
-        className={`w-full justify-start gap-3 ${activeTab === 'settings' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800/50'}`}
-        onClick={() => setActiveTab('settings')}
-      >
-        <SettingsIcon className="w-4 h-4" /> Settings
-      </Button>
-    </div>
-
-    <div className="mt-auto p-4 border-t border-slate-800">
-      {isLoggedIn ? (
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/50">
-          <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs">
-            JD
+    {/* Bottom: Settings + Profile */}
+    <div className="shrink-0 border-t border-slate-800/90">
+      <div className="p-2">
+        <NavItem
+          isActive={activeTab === 'settings'}
+          onClick={() => setActiveTab('settings')}
+          icon={SettingsIcon}
+          label="Settings"
+        />
+      </div>
+      <div className="p-3 pt-0">
+        {isLoggedIn ? (
+          <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
+            <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+              JD
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-white truncate">John Doe</div>
+              <div className="text-xs text-slate-500 truncate">Enterprise</div>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <div className="text-sm font-medium text-white truncate">John Doe</div>
-            <div className="text-xs text-slate-500 truncate">Enterprise Plan</div>
+        ) : (
+          <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
+            <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-slate-300 text-sm font-medium shrink-0">
+              ?
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-slate-400 truncate">Guest</div>
+              <div className="text-xs text-slate-500 truncate">Limited access</div>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/50">
-          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold text-xs">
-            ?
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <div className="text-sm font-medium text-slate-400 truncate">Guest User</div>
-            <div className="text-xs text-slate-600 truncate">Limited Access</div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   </aside>
 );
@@ -209,6 +313,7 @@ function App() {
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchPopupOpen, setSearchPopupOpen] = useState(false);
 
   // Demo loading
   const handleLoadDemo = () => {
@@ -256,8 +361,6 @@ function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard onNavigate={setActiveTab} />;
       case 'projects':
         return <ProjectsList onNewProject={() => setActiveTab('new_project')} />;
       case 'team':
@@ -268,7 +371,15 @@ function App() {
         return <Models />;
       case 'settings':
         return <Settings />;
+      case 'brd-1':
+      case 'brd-2':
+      case 'brd-3':
+      case 'brd-4':
+      case 'brd-5':
+        // Handle BRD navigation - for now, redirect to projects view
+        return <ProjectsList onNewProject={() => setActiveTab('new_project')} />;
       case 'new_project':
+      default:
         return (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* Top Header */}
@@ -456,8 +567,6 @@ function App() {
             <TransparencyFooter metadata={result?.metadata} />
           </div>
         );
-      default:
-        return <Dashboard onNavigate={setActiveTab} />;
     }
   }
 
@@ -465,11 +574,23 @@ function App() {
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       {showLoginModal && <LoginModal onLogin={handleLogin} onClose={handleCloseModal} />}
 
+      <SearchBRDPopup
+        open={searchPopupOpen}
+        onClose={() => setSearchPopupOpen(false)}
+        items={BRDS_LIBRARY}
+        onSelectItem={(id) => {
+          setActiveTab(id);
+          setSearchPopupOpen(false);
+        }}
+      />
+
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isLoggedIn={isLoggedIn}
         onLoginClick={() => setShowLoginModal(true)}
+        onOpenSearch={() => setSearchPopupOpen(true)}
+        brds={BRDS_LIBRARY}
       />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
