@@ -21,6 +21,7 @@ Output must be strict JSON matching the following schema:
 Do not include markdown or explanations outside the JSON block.
 """
 
+
 def analyze_gaps(brd: BRDSchema) -> GapSchema:
-    prompt = PROMPT_TEMPLATE.format(brd_json=brd.json(), schema=GapSchema.schema_json())
+    prompt = PROMPT_TEMPLATE.format(brd_json=brd.model_dump_json(), schema=GapSchema.model_json_schema())
     return generate_structured_response(prompt, GapSchema, GEMINI_PRO_MODEL_ID)

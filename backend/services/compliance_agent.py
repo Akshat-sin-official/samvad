@@ -22,6 +22,10 @@ Output must be strict JSON matching the following schema:
 Do not include markdown or explanations outside the JSON block.
 """
 
+
 def analyze_compliance(data_model: DataModelSchema) -> ComplianceSchema:
-    prompt = PROMPT_TEMPLATE.format(data_model_json=data_model.json(), schema=ComplianceSchema.schema_json())
+    prompt = PROMPT_TEMPLATE.format(
+        data_model_json=data_model.model_dump_json(),
+        schema=ComplianceSchema.model_json_schema()
+    )
     return generate_structured_response(prompt, ComplianceSchema, GEMINI_FLASH_MODEL_ID)

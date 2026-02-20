@@ -16,16 +16,55 @@ export const apiClient = axios.create({
   },
 });
 
+/** Attach Bearer token to every outgoing request */
 apiClient.interceptors.request.use(async (config) => {
   if (tokenGetter) {
-    const token = await tokenGetter();
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const token = await tokenGetter();
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.warn('[API] No token available for request:', config.url);
+      }
+    } catch (e) {
+      console.error('[API] Token getter threw:', e);
     }
   }
   return config;
 });
+
+/**
+ * On 401, force-refresh the token and retry the request exactly once.
+ * This handles the race condition where the token getter is registered
+ * before Firebase has fully resolved the session.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Only retry once; skip if no tokenGetter or already retried
+    if (error.response?.status === 401 && !originalRequest._retry && tokenGetter) {
+      originalRequest._retry = true;
+      console.warn('[API] 401 received — force-refreshing token and retrying...');
+      try {
+        // Force Firebase to issue a fresh token (bypasses the 1-hour cache)
+        // tokenGetter should call user.getIdToken(true) for force refresh
+        const freshToken = await tokenGetter();
+        if (freshToken) {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers['Authorization'] = `Bearer ${freshToken}`;
+          return apiClient(originalRequest);
+        }
+      } catch (refreshErr) {
+        console.error('[API] Token refresh failed during retry:', refreshErr);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export interface GenerateRequestPayload {
   idea: string;

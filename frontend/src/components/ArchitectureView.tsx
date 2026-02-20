@@ -40,9 +40,8 @@ export const ArchitectureView: React.FC<ArchitectureViewProps> = ({ data }) => {
                 const { svg } = await mermaid.render(id, data.diagram_mermaid);
                 setMermaidSvg(svg);
                 setMermaidError(null);
-            } catch (err: any) {
-                console.error("Mermaid render error:", err);
-                setMermaidError(err.message || "Could not render diagram");
+            } catch (err: unknown) {
+                setMermaidError((err as Error).message || "Could not render diagram");
             }
         };
 

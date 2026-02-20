@@ -7,6 +7,7 @@ import {
   Search,
   Plus,
   Settings as SettingsIcon,
+  LogOut,
 } from 'lucide-react';
 import type { BRDListItem } from './SearchBRDPopup';
 
@@ -141,22 +142,27 @@ import type { User } from 'firebase/auth';
 export interface SidebarProps {
   activeTab: string;
   setActiveTab: (t: string) => void;
+  onNewProject: () => void;
   isLoggedIn: boolean;
   user: User | null;
   onLoginClick: () => void;
   onOpenSearch: () => void;
+  onLogout: () => void;
   brds: BRDListItem[];
 }
 
 export function Sidebar({
   activeTab,
   setActiveTab,
+  onNewProject,
   isLoggedIn,
   user,
   onLoginClick,
   onOpenSearch,
+  onLogout,
   brds,
 }: SidebarProps) {
+  const [profileOpen, setProfileOpen] = useState(false);
   return (
     <aside className="w-64 flex flex-col h-screen bg-[#0f172a] border-r border-slate-800/90 shrink-0 select-none">
       {/* Logo */}
@@ -203,7 +209,7 @@ export function Sidebar({
         />
         <NavItem
           isActive={activeTab === 'new_project'}
-          onClick={() => setActiveTab('new_project')}
+          onClick={onNewProject}
           icon={Plus}
           label="New Project"
         />
@@ -221,26 +227,56 @@ export function Sidebar({
         </div>
         <div className="p-3 pt-0">
           {isLoggedIn && user ? (
-            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || user.email || 'User'}
-                  className="w-9 h-9 rounded-full shrink-0"
-                />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                  {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+            <div className="relative">
+              {/* Profile card — click to reveal logout */}
+              <button
+                type="button"
+                onClick={() => setProfileOpen((o) => !o)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600/60 transition-all duration-150 text-left group"
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || user.email || 'User'}
+                    className="w-9 h-9 rounded-full shrink-0 ring-2 ring-transparent group-hover:ring-indigo-500/40 transition-all"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0 ring-2 ring-transparent group-hover:ring-indigo-500/40 transition-all">
+                    {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white truncate">
+                    {user.displayName || user.email || 'User'}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">
+                    {user.email || 'Signed in'}
+                  </div>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform duration-200 ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown */}
+              {profileOpen && (
+                <div className="absolute bottom-full left-0 right-0 mb-1.5 bg-slate-800 border border-slate-700/80 rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-20">
+                  <div className="p-2 border-b border-slate-700/60">
+                    <p className="text-xs text-slate-500 px-2 py-1 truncate">{user.email}</p>
+                  </div>
+                  <div className="p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors font-medium"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign out
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-white truncate">
-                  {user.displayName || user.email || 'User'}
-                </div>
-                <div className="text-xs text-slate-500 truncate">
-                  {user.email || 'Signed in'}
-                </div>
-              </div>
             </div>
           ) : (
             <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">

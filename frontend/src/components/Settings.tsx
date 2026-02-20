@@ -15,7 +15,7 @@ const sections: { id: SettingsSection; label: string; icon: typeof User }[] = [
 ];
 
 export function Settings() {
-  const { signOutUser } = useAuth();
+  const { signOutUser, user: authUser } = useAuth();
   const [active, setActive] = useState<SettingsSection>('profile');
   const [displayName, setDisplayName] = useState('John Doe');
   const [email, setEmail] = useState('john@samvad.ai');
@@ -30,9 +30,8 @@ export function Settings() {
   const handleSignOut = async () => {
     try {
       await signOutUser();
-      // User will be redirected to login modal via auth state change
-    } catch (error) {
-      console.error('Sign out error:', error);
+    } catch {
+      // Ignore sign out errors
     }
   };
 
@@ -46,14 +45,17 @@ export function Settings() {
         setBio(settings.bio || bio);
         setTheme((settings.appearance as 'Light' | 'Dark' | 'System') || 'Light');
         setNotifications(settings.notifications || notifications);
-      } catch (e) {
-        // Best-effort for hackathon; fall back to defaults
-        console.warn('Failed to load user profile', e);
+      } catch {
+        // Fall back to Firebase auth user when /users/me returns 404
+        if (authUser) {
+          setDisplayName(authUser.displayName || 'User');
+          setEmail(authUser.email || '');
+        }
       }
     };
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authUser?.uid]);
 
   const persistSettings = async () => {
     await updateUserSettings({

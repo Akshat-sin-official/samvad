@@ -5,7 +5,7 @@ from ..config import GEMINI_PRO_MODEL_ID
 
 PROMPT_TEMPLATE = """
 As a Senior Database Architect, design a normalized data model (Entities, Fields, Types) based on the following Business Requirements Document.
-Ensure the entities are well-named and related appropriately (though relations are not explicitly modeled here, the fields should hint at them - e.g. Foreign Keys).
+Ensure the entities are well-named and related appropriately (fields should hint at foreign keys where applicable).
 Identify sensitive data fields.
 
 Business Requirements Document:
@@ -21,6 +21,7 @@ Output must be strict JSON matching the following schema:
 Do not include markdown or explanations outside the JSON block.
 """
 
+
 def generate_data_model(brd: BRDSchema) -> DataModelSchema:
-    prompt = PROMPT_TEMPLATE.format(brd_json=brd.json(), schema=DataModelSchema.schema_json())
+    prompt = PROMPT_TEMPLATE.format(brd_json=brd.model_dump_json(), schema=DataModelSchema.model_json_schema())
     return generate_structured_response(prompt, DataModelSchema, GEMINI_PRO_MODEL_ID)

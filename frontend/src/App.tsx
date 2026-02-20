@@ -17,109 +17,14 @@ import {
   Share2, ChevronRight, BrainCircuit, Server,
   FileText, Database, ShieldAlert,
 } from 'lucide-react';
-import type { BRD, GapAnalysis, DataModel, Compliance, Architecture, GenerateResponse } from './types';
-import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter } from './api/client';
+import type { GenerateResponse } from './types';
+import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser } from './api/client';
 import { SearchBRDPopup } from './components/SearchBRDPopup';
 import type { BRDListItem } from './components/SearchBRDPopup';
 import { useAuth } from './auth';
+import { AuthModal } from './components/auth/AuthModal';
 
-// --- Login Modal Component ---
-const LoginModal = ({ 
-  onLogin, 
-  onSignUp, 
-  onClose, 
-  isLoading 
-}: { 
-  onLogin: () => void; 
-  onSignUp: () => void; 
-  onClose: () => void;
-  isLoading?: boolean;
-}) => (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-      <button
-        onClick={onClose}
-        disabled={isLoading}
-        className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors z-10 disabled:opacity-50"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
 
-      <div className="p-8 text-center">
-        <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-200">
-          <Sparkles className="w-8 h-8 text-white" />
-        </div>
-
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Samvad<span className="text-indigo-600">.ai</span></h1>
-        <p className="text-slate-500 mb-8 max-w-xs mx-auto">Sign in with Google to save your work and access advanced features.</p>
-
-        {isLoading && (
-          <div className="mb-4 flex items-center justify-center gap-2 text-indigo-600">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm">Redirecting to Google...</span>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <Button 
-            size="lg" 
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-lg h-12 shadow-md shadow-indigo-500/20" 
-            onClick={onLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Signing in...
-              </>
-            ) : (
-              'Log In with Google'
-            )}
-          </Button>
-          <Button 
-            size="lg" 
-            variant="outline" 
-            className="w-full text-lg h-12 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-            onClick={onSignUp}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Signing up...
-              </>
-            ) : (
-              'Sign Up with Google'
-            )}
-          </Button>
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="w-full text-sm text-slate-500 hover:text-slate-700 transition-colors py-2 disabled:opacity-50"
-          >
-            Continue as Guest
-          </button>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <div className="flex justify-center gap-6 text-slate-400">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-semibold">
-              <ShieldAlert className="w-4 h-4" /> SOC2 Compliant
-            </div>
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-semibold">
-              <Server className="w-4 h-4" /> Enterprise Ready
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="bg-slate-50 p-4 text-center text-xs text-slate-400 border-t border-slate-100">
-        &copy; 2026 Samvad.ai . All rights reserved.
-      </div>
-    </div>
-  </div>
-);
 
 // --- Transparency Footer ---
 const TransparencyFooter = ({ metadata }: { metadata?: GenerateResponse['metadata'] }) => {
@@ -140,11 +45,10 @@ const TransparencyFooter = ({ metadata }: { metadata?: GenerateResponse['metadat
 }
 
 function App() {
-  const { user, loading: authLoading, signInWithGoogle, signUpWithGoogle } = useAuth();
-  const isLoggedIn = !!user;
+  const { user, loading: authLoading, signOutUser } = useAuth();
+  const isLoggedIn = !!(user && (user.providerData[0]?.providerId !== 'password' || user.emailVerified));
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
-  const [activeTab, setActiveTab] = useState('new_project'); // Default to generator for now, can be 'dashboard'
+  const [activeTab, setActiveTab] = useState('new_project');
   const [idea, setIdea] = useState('');
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -155,42 +59,81 @@ function App() {
 
   // Show login modal if not authenticated and auth has finished loading
   useEffect(() => {
-    if (!authLoading && !isLoggedIn) {
-      setShowLoginModal(true);
-    } else if (isLoggedIn) {
+    if (authLoading) return;
+    if (isLoggedIn) {
       setShowLoginModal(false);
-      setIsAuthRedirecting(false);
-      // Redirect to projects tab after successful login
-      if (activeTab === 'new_project' && projects.length > 0) {
-        setActiveTab('projects');
-      } else if (activeTab === 'new_project') {
-        setActiveTab('projects');
-      }
+    } else {
+      setShowLoginModal(true);
     }
-  }, [authLoading, isLoggedIn, activeTab, projects.length]);
+  }, [authLoading, isLoggedIn]);
 
   useEffect(() => {
     setAuthTokenGetter(async () => {
       if (!user) return null;
-      return await user.getIdToken();
+      try {
+        // forceRefresh=true ensures we never send an expired token,
+        // which also powers the 401-retry in the API interceptor.
+        return await user.getIdToken(true);
+      } catch (e) {
+        console.error('[Auth] getIdToken failed:', e);
+        return null;
+      }
     });
   }, [user]);
 
+  // Initialize user record in database after successful authentication
   useEffect(() => {
-    if (!isLoggedIn) {
-      setProjects([]);
+    if (authLoading || !isLoggedIn || !user) {
       return;
     }
+
+    const initializeUser = async () => {
+      try {
+        await fetchCurrentUser();
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number }; message?: string };
+        if (err.response?.status === 401) {
+          setError('Failed to authenticate with backend. Please try signing in again.');
+        } else if (err.response?.status === 404) {
+          // Backend may not have /users/me deployed yet - ignore
+        } else if (err.response?.status && err.response.status >= 500) {
+          setError('Backend server error. Please try again later.');
+        } else if (!err.message?.includes('Network Error')) {
+          setError(`Failed to initialize user: ${err.message || 'Unknown error'}`);
+        }
+      }
+    };
+
+    initializeUser();
+  }, [isLoggedIn, authLoading, user]);
+
+  useEffect(() => {
+    // Don't load projects if auth is still loading or user is not logged in
+    if (authLoading || !isLoggedIn || !user) {
+      if (!isLoggedIn) {
+        setProjects([]);
+      }
+      return;
+    }
+
     const load = async () => {
       try {
         const list = await fetchProjects();
         setProjects(list);
-      } catch (e) {
-        console.error('Failed to load projects', e);
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number }; message?: string };
+        if (err.response?.status === 401) {
+          setError('Authentication failed. Please try signing in again.');
+        } else if (err.response?.status === 404) {
+          // Backend may not have /projects endpoint deployed yet - just use empty list
+          setProjects([]);
+        } else if (err.response?.status && err.response.status >= 500) {
+          setError('Backend server error. Please try again later.');
+        }
       }
     };
     load();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, authLoading, user]);
 
   const handleSubmit = async () => {
     if (!idea.trim()) return;
@@ -208,43 +151,37 @@ function App() {
       setSelectedProjectId(project_id);
       const list = await fetchProjects();
       setProjects(list);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'An unexpected error occurred.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string };
+      let errorMessage = 'An unexpected error occurred.';
+
+      if (e.response?.status === 500) {
+        errorMessage = e.response?.data?.detail || 'Backend server error. Please check server logs.';
+      } else if (e.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please try signing in again.';
+      } else if (e.response?.status === 404) {
+        errorMessage = 'API endpoint not found. Please check backend configuration.';
+      } else if (e.response?.data?.detail) {
+        errorMessage = e.response.data.detail;
+      } else if (e.message) {
+        errorMessage = e.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   }
 
-  const handleLogin = async () => {
-    try {
-      setIsAuthRedirecting(true);
-      await signInWithGoogle();
-      // Note: signInWithRedirect will navigate away, so code below won't execute
-      // The redirect result will be handled in auth.tsx
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setIsAuthRedirecting(false);
-      setError('Failed to sign in. Please try again.');
-    }
-  };
-
-  const handleSignUp = async () => {
-    try {
-      setIsAuthRedirecting(true);
-      await signUpWithGoogle();
-      // Note: signInWithRedirect will navigate away, so code below won't execute
-      // The redirect result will be handled in auth.tsx
-    } catch (err: any) {
-      console.error('Sign up error:', err);
-      setIsAuthRedirecting(false);
-      setError('Failed to sign up. Please try again.');
-    }
+  const handleNewProject = () => {
+    setActiveTab('new_project');
+    setResult(null);
+    setIdea('');
+    setSelectedProjectId(null);
   };
 
   const handleCloseModal = () => {
-    if (!isAuthRedirecting) {
-      setShowLoginModal(false);
-    }
+    setShowLoginModal(false);
   };
 
   const handleSelectProject = async (id: string) => {
@@ -254,8 +191,8 @@ function App() {
       const full = await fetchProjectById(id);
       setIdea(full.idea || '');
       setResult(full.artifacts as GenerateResponse);
-    } catch (e) {
-      console.error('Failed to load project', e);
+    } catch {
+      setError('Failed to load project.');
     }
   };
 
@@ -265,11 +202,7 @@ function App() {
         return (
           <ProjectsList
             projects={projects}
-            onNewProject={() => {
-              setActiveTab('new_project');
-              setResult(null);
-              setIdea('');
-            }}
+            onNewProject={handleNewProject}
             onOpenProject={handleSelectProject}
           />
         );
@@ -284,7 +217,7 @@ function App() {
         return (
           <BRDDetailView
             spec={spec}
-            onNewProject={() => setActiveTab('new_project')}
+            onNewProject={handleNewProject}
           />
         );
       }
@@ -362,7 +295,7 @@ function App() {
 
                   {error && (
                     <div className="mt-4 p-3 bg-red-50 text-red-600 text-xs rounded border border-red-100">
-                      {error}
+                      <strong>Error:</strong> {error}
                     </div>
                   )}
 
@@ -499,12 +432,10 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      {!authLoading && !isLoggedIn && showLoginModal && (
-        <LoginModal 
-          onLogin={handleLogin} 
-          onSignUp={handleSignUp}
+      {!authLoading && showLoginModal && (
+        <AuthModal
           onClose={handleCloseModal}
-          isLoading={isAuthRedirecting}
+          error={error}
         />
       )}
 
@@ -526,10 +457,12 @@ function App() {
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onNewProject={handleNewProject}
         isLoggedIn={isLoggedIn}
         user={user}
         onLoginClick={() => setShowLoginModal(true)}
         onOpenSearch={() => setSearchPopupOpen(true)}
+        onLogout={signOutUser}
         brds={projects.map((p) => ({
           id: p.id,
           name: p.name,

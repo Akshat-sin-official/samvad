@@ -1,10 +1,32 @@
+import os
 from typing import Optional
 
+import firebase_admin
+from firebase_admin import auth, credentials
 from fastapi import Depends, HTTPException, Request, status
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
 
+from ..config import FIREBASE_PROJECT_ID
 from ..services.firestore_client import upsert_user
+
+
+def init_firebase():
+    """Initialize Firebase Admin SDK against the correct Firebase project."""
+    try:
+        firebase_admin.get_app()
+    except ValueError:
+        options = (
+            {"projectId": FIREBASE_PROJECT_ID}
+            if FIREBASE_PROJECT_ID and FIREBASE_PROJECT_ID != "your-project-id"
+            else {}
+        )
+        key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "service_account_key.json")
+        if os.path.exists(key_path):
+            print(f"[Firebase] Using service account key (project={FIREBASE_PROJECT_ID})")
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred, options=options)
+        else:
+            print(f"[Firebase] Using Application Default Credentials (project={FIREBASE_PROJECT_ID})")
+            firebase_admin.initialize_app(options=options)
 
 
 class CurrentUser:
@@ -15,22 +37,9 @@ class CurrentUser:
         self.photo_url = photo_url
 
 
-def _verify_id_token(token: str) -> dict:
-    """
-    Verify a Firebase / Google ID token.
-
-    For simplicity in hackathon mode, we allow any audience that passes verification
-    and rely on the project configuration in Firebase. If you want to restrict
-    audience, pass the expected client ID via FIREBASE_CLIENT_ID env var and use it here.
-    """
-    request_adapter = google_requests.Request()
-    # audience = os.getenv("FIREBASE_CLIENT_ID")  # Optional hardening
-    # decoded = id_token.verify_oauth2_token(token, request_adapter, audience=audience)
-    decoded = id_token.verify_oauth2_token(token, request_adapter)
-    return decoded
-
-
 async def get_current_user(request: Request) -> CurrentUser:
+    init_firebase()
+    
     auth_header: str = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -40,18 +49,28 @@ async def get_current_user(request: Request) -> CurrentUser:
 
     token = auth_header.split(" ", 1)[1]
     try:
-        decoded = _verify_id_token(token)
-    except Exception:
+        # Verify the ID token using Firebase Admin SDK
+        decoded = auth.verify_id_token(token)
+    except Exception as e:
+        print(f"Token verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid ID token",
+            detail=f"Invalid ID token: {str(e)}",
         )
 
-    user_id = decoded.get("uid") or decoded.get("sub")
+    user_id = decoded.get("uid")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
+        )
+
+    # Enforce email verification for password-based sign-in
+    sign_in_provider = decoded.get("firebase", {}).get("sign_in_provider", "")
+    if sign_in_provider == "password" and not decoded.get("email_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please verify your email address before accessing this resource.",
         )
 
     email = decoded.get("email")

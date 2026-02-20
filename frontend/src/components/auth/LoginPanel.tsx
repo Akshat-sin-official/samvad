@@ -1,0 +1,160 @@
+import { useState } from 'react';
+import { GoogleButton } from './GoogleButton';
+import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
+
+interface LoginPanelProps {
+    onGoogleSignIn: () => Promise<void>;
+    onSignInWithEmail: (email: string, password: string) => Promise<void>;
+    onForgotPassword: () => void;
+    onGoToSignup: () => void;
+    generalError?: string | null;
+}
+
+export const LoginPanel = ({
+    onGoogleSignIn,
+    onSignInWithEmail,
+    onForgotPassword,
+    onGoToSignup,
+    generalError,
+}: LoginPanelProps) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [emailLoading, setEmailLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleGoogleSignIn = async () => {
+        setError(null);
+        setGoogleLoading(true);
+        try {
+            await onGoogleSignIn();
+        } catch (e: unknown) {
+            const err = e as { message?: string };
+            setError(err.message || 'Google sign-in failed. Please try again.');
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
+    const handleEmailSignIn = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email || !password) return;
+        setError(null);
+        setEmailLoading(true);
+        try {
+            await onSignInWithEmail(email, password);
+        } catch (err: unknown) {
+            const e = err as { code?: string };
+            if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+                setError('Invalid email or password. Please try again.');
+            } else if (e.code === 'auth/too-many-requests') {
+                setError('Too many attempts. Please wait a moment and try again.');
+            } else if (e.code === 'auth/user-disabled') {
+                setError('This account has been disabled. Please contact support.');
+            } else {
+                setError('Sign-in failed. Please check your credentials.');
+            }
+        } finally {
+            setEmailLoading(false);
+        }
+    };
+
+    const displayError = error || generalError;
+
+    return (
+        <div className="space-y-5">
+            <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
+                <p className="text-sm text-slate-500">Sign in to your Samvad.ai account</p>
+            </div>
+
+            {displayError && (
+                <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                    <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-4.75a.75.75 0 001.5 0v-4.5a.75.75 0 00-1.5 0v4.5zm.75-8.25a1 1 0 110 2 1 1 0 010-2z" clipRule="evenodd" />
+                    </svg>
+                    <span>{displayError}</span>
+                </div>
+            )}
+
+            <GoogleButton onClick={handleGoogleSignIn} loading={googleLoading}>
+                Continue with Google
+            </GoogleButton>
+
+            <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-100" />
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">or</span>
+                <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            <form onSubmit={handleEmailSignIn} className="space-y-4">
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Email address</label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        autoComplete="email"
+                        placeholder="you@company.com"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all duration-200"
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
+                        <button
+                            type="button"
+                            onClick={onForgotPassword}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                        >
+                            Forgot password?
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <input
+                            type={showPassword ? 'text' : 'password'}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            autoComplete="current-password"
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 pr-11 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all duration-200"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={emailLoading || !email || !password}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md shadow-indigo-500/20 active:scale-[0.99] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    {emailLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <>Sign in <ArrowRight className="w-4 h-4" /></>
+                    )}
+                </button>
+            </form>
+
+            <p className="text-center text-sm text-slate-500">
+                Don't have an account?{' '}
+                <button
+                    onClick={onGoToSignup}
+                    className="text-indigo-600 hover:text-indigo-700 font-semibold transition-colors"
+                >
+                    Sign up free
+                </button>
+            </p>
+        </div>
+    );
+};

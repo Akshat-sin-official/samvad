@@ -1,24 +1,37 @@
 from ..services.vertex_client import generate_content
 from ..schemas.brd_schema import BRDSchema
 from ..utils.ai_helper import generate_structured_response
-from ..config import GEMINI_PRO_MODEL_ID
+from ..config import GEMINI_25_PRO_MODEL_ID
 
 PROMPT_TEMPLATE = """
-You are an expert Business Analyst. Your task is to convert the following raw business idea into a structured Business Requirements Document (BRD).
+You are a world-class Senior Business Analyst and Product Strategist.
 
-Make reasonable assumptions where necessary to create a comprehensive document, but explicitly list them.
-Identify potential risks associated with the implementation.
-Define clear functional and non-functional requirements.
+Convert the following raw product idea into a comprehensive, production-ready Business Requirements Document (BRD).
+Be thorough, precise, and assume a sophisticated technical and business audience.
+Make reasonable assumptions where necessary but list them explicitly.
 
 Raw Idea:
 {idea}
 
-Output must be strictly in JSON using the following schema:
+Your task:
+1. Write a sharp, clear PROBLEM STATEMENT that frames the pain point and opportunity.
+2. Define 4–6 concrete BUSINESS OBJECTIVES that are measurable.
+3. Clearly delineate what is IN SCOPE and OUT OF SCOPE.
+4. Identify all USER ROLES who will interact with the system.
+5. List 8–12 specific FUNCTIONAL REQUIREMENTS.
+6. List 5–8 NON-FUNCTIONAL REQUIREMENTS (performance, security, scalability, etc.).
+7. Outline key DATA REQUIREMENTS (types of data, retention, processing needs).
+8. Define 4–6 KPIs to measure project success.
+9. List ASSUMPTIONS made.
+10. Identify 4–6 key project RISKS.
+
+Output must be strict JSON matching the following schema:
 {schema}
 
-Format your response as a valid JSON object. Do not include markdown or explanations outside the JSON block.
+Do not include markdown, commentary, or any text outside the JSON block.
 """
 
+
 def generate_brd(idea: str) -> BRDSchema:
-    prompt = PROMPT_TEMPLATE.format(idea=idea, schema=BRDSchema.schema_json())
-    return generate_structured_response(prompt, BRDSchema, GEMINI_PRO_MODEL_ID)
+    prompt = PROMPT_TEMPLATE.format(idea=idea, schema=BRDSchema.model_json_schema())
+    return generate_structured_response(prompt, BRDSchema, GEMINI_25_PRO_MODEL_ID)

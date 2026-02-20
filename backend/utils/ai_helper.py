@@ -1,72 +1,75 @@
 import json
 import re
-from typing import Type, TypeVar, Optional, Dict, Any
+from typing import Type, TypeVar, Optional
 from pydantic import BaseModel, ValidationError
-from ..services.vertex_client import generate_content
-from ..config import GEMINI_PRO_MODEL_ID, GEMINI_FLASH_MODEL_ID
+from ..services.vertex_client import generate_content, init_vertex
+from ..config import GEMINI_PRO_MODEL_ID
 
 T = TypeVar("T", bound=BaseModel)
 
-def extract_json(text: str) -> Optional[str]:
-    """Extracts JSON block from text."""
-    match = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
-    if match:
-        return match.group(1)
-    
-    match = re.search(r"```(.*?)\n```", text, re.DOTALL) # looser match
-    if match:
-       return match.group(1)
 
-    # fallback: try finding first { and last }
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1:
-        return text[start:end+1]
+def extract_json(text: str) -> Optional[str]:
+    """Extracts a JSON block from text output, handling various model response formats."""
+    # 1. Explicit ```json ... ``` block
+    match = re.search(r"```json\s*\n(.*?)\n```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    # 2. Any ``` ... ``` block
+    match = re.search(r"```\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if match:
+        candidate = match.group(1).strip()
+        if candidate.startswith("{"):
+            return candidate
+
+    # 3. Fallback: outermost { ... }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+
     return None
+
 
 def generate_structured_response(
     prompt: str,
     schema_model: Type[T],
     model_name: str = GEMINI_PRO_MODEL_ID,
-    retry_count: int = 1
+    retry_count: int = 2,
 ) -> T:
     """
-    Generates content from the AI model and validates it against a Pydantic schema.
-    Retries once if validation fails.
+    Calls Vertex AI, extracts JSON from the response, validates it against
+    the given Pydantic schema. Retries up to `retry_count` times with an
+    error-correction prompt on failure.
     """
-    
-    # 1. First attempt
-    try:
-        raw_response = generate_content(model_name, prompt)
-        json_str = extract_json(raw_response)
-        
-        if not json_str:
-             if raw_response.strip().startswith("{") and raw_response.strip().endswith("}"):
-                  json_str = raw_response.strip()
-             else:
-                  raise ValueError("No JSON found in response")
+    # Ensure Vertex is initialized (idempotent)
+    init_vertex()
 
-        data = json.loads(json_str)
-        return schema_model(**data)
-        
-    except (json.JSONDecodeError, ValidationError, ValueError) as e:
-        if retry_count > 0:
-            print(f"Validation failed: {e}. Retrying...")
-            # 2. Retry with error message
-            correction_prompt = f"""
-            The previous response was invalid JSON or did not match the schema.
-            Error: {str(e)}
-            
-            Original Prompt:
-            {prompt}
-            
-            Please correct the format and return ONLY the valid JSON matching the schema.
-            """
-            return generate_structured_response(
-                correction_prompt,
-                schema_model,
-                model_name,
-                retry_count - 1
-            )
-        else:
-            raise e
+    last_error: Optional[Exception] = None
+
+    for attempt in range(retry_count + 1):
+        try:
+            raw = generate_content(model_name, prompt)
+            json_str = extract_json(raw)
+
+            if not json_str:
+                raise ValueError(f"No JSON block found in model response. Raw (first 500 chars): {raw[:500]}")
+
+            data = json.loads(json_str)
+            return schema_model(**data)
+
+        except (json.JSONDecodeError, ValidationError, ValueError) as e:
+            last_error = e
+            if attempt < retry_count:
+                print(f"[ai_helper] Attempt {attempt + 1} failed: {e}. Retrying with error-correction prompt...")
+                prompt = (
+                    f"The previous response was invalid JSON or did not match the schema.\n"
+                    f"Error: {str(e)}\n\n"
+                    f"Original prompt:\n{prompt}\n\n"
+                    f"Please respond with ONLY a valid JSON object matching the schema. No markdown, no explanations."
+                )
+            else:
+                raise RuntimeError(
+                    f"Failed to get a valid structured response after {retry_count + 1} attempts. "
+                    f"Last error: {last_error}"
+                ) from last_error

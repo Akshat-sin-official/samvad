@@ -3,12 +3,33 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   onAuthStateChanged,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signOut,
   type User,
 } from 'firebase/auth';
+
+// --- Firebase config ---
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+];
+
+const missingVars = requiredEnvVars.filter((v) => !import.meta.env[v]);
+if (missingVars.length > 0) {
+  console.error('Missing Firebase environment variables:', missingVars);
+}
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,20 +40,38 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
+let firebaseApp: ReturnType<typeof initializeApp>;
+let auth: ReturnType<typeof getAuth>;
 
-interface AuthContextValue {
+try {
+  if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
+    throw new Error('Firebase configuration is incomplete.');
+  }
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  auth.languageCode = 'en';
+} catch (error) {
+  console.error('Firebase initialization failed:', error);
+  throw error;
+}
+
+// --- Types ---
+export interface AuthContextValue {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signUpWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
   signOutUser: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// --- Provider ---
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,30 +79,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let isMounted = true;
 
-    // Check if user is returning from redirect
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && isMounted) {
-          // User successfully signed in via redirect
-          // onAuthStateChanged will update the user state
-          console.log('User signed in via redirect:', result.user.email);
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user && isMounted) {
+          setUser(result.user);
         }
-      })
-      .catch((error) => {
-        if (isMounted) {
-          // Only log non-cancellation errors
-          if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-            console.error('Redirect result error:', error);
-          }
+      } catch (err: unknown) {
+        const e = err as { code?: string };
+        if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+          console.error('Redirect check error:', err);
         }
-      });
+      }
+    };
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (isMounted) {
-        setUser(firebaseUser);
-        setLoading(false);
-      }
+      if (!isMounted) return;
+      setUser(firebaseUser);
+      setLoading(false);
     });
+
+    checkRedirect();
 
     return () => {
       isMounted = false;
@@ -71,52 +107,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  // --- Google Sign In ---
+  const _googleSignIn = useCallback(async (extraParams: Record<string, string> = {}) => {
+    if (!auth) throw new Error('Firebase Auth is not initialized.');
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
+    provider.setCustomParameters({ prompt: 'select_account', ...extraParams });
+
     try {
-      const provider = new GoogleAuthProvider();
-      // Add additional scopes if needed
-      provider.addScope('profile');
-      provider.addScope('email');
-      // Set custom parameters
-      provider.setCustomParameters({
-        prompt: 'select_account', // Force account selection
-      });
-      
-      await signInWithRedirect(auth, provider);
-      // User will be redirected to Google, then back to the app
-      // onAuthStateChanged will handle the state update
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      throw error;
+      await signInWithPopup(auth, provider);
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string; stack?: string };
+      if (auth.currentUser) return;
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      const isCOOP =
+        e.message?.includes('Cross-Origin-Opener-Policy') ||
+        e.message?.includes('window.closed') ||
+        e.stack?.includes('popup.ts');
+      if (isCOOP && auth.currentUser) return;
+      throw e;
     }
   }, []);
 
-  const signUpWithGoogle = useCallback(async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      // Add additional scopes
-      provider.addScope('profile');
-      provider.addScope('email');
-      // For signup, force account selection and consent screen
-      provider.setCustomParameters({
-        prompt: 'select_account consent', // Force account selection and show consent screen
-      });
-      
-      await signInWithRedirect(auth, provider);
-      // User will be redirected to Google, then back to the app
-      // Firebase automatically creates a new user if they don't exist
-      // onAuthStateChanged will handle the state update
-    } catch (error: any) {
-      console.error('Sign up error:', error);
-      throw error;
-    }
+  const signInWithGoogle = useCallback(() => _googleSignIn(), [_googleSignIn]);
+  const signUpWithGoogle = useCallback(() => _googleSignIn({ prompt: 'select_account consent' }), [_googleSignIn]);
+
+  // --- Email Sign In ---
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   }, []);
 
+  // --- Email Sign Up ---
+  const signUpWithEmail = useCallback(async (email: string, password: string, displayName: string) => {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    // Set display name
+    await updateProfile(result.user, { displayName });
+    // Send verification email
+    await sendEmailVerification(result.user);
+  }, []);
+
+  // --- Password Reset ---
+  const sendPasswordReset = useCallback(async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  }, []);
+
+  // --- Resend Verification Email ---
+  const resendVerificationEmail = useCallback(async () => {
+    if (!auth.currentUser) throw new Error('No user is signed in.');
+    await sendEmailVerification(auth.currentUser);
+  }, []);
+
+  // --- Sign Out ---
   const signOutUser = useCallback(async () => {
     await signOut(auth);
   }, []);
 
-  const getIdToken = useCallback(async () => {
+  // --- Get ID Token ---
+  const getIdToken = useCallback(async (): Promise<string | null> => {
     if (!auth.currentUser) return null;
     return await auth.currentUser.getIdToken();
   }, []);
@@ -126,6 +177,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signInWithGoogle,
     signUpWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    sendPasswordReset,
+    resendVerificationEmail,
     signOutUser,
     getIdToken,
   };
@@ -135,9 +190,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = (): AuthContextValue => {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 };
 
@@ -147,4 +200,3 @@ export const getAuthTokenGetter = (authContext?: AuthContextValue) => {
     return authContext.getIdToken();
   };
 };
-

@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+import os
 
 from google.cloud import firestore
 from google.cloud.firestore_v1 import Client
@@ -10,7 +11,23 @@ def get_db() -> Client:
     Returns a Firestore client using Application Default Credentials.
     Relies on PROJECT_ID being set in the environment (already used by Vertex AI).
     """
-    return firestore.Client()
+    from ..config import FIREBASE_PROJECT_ID as PROJECT_ID
+    
+    # On Cloud Run, GOOGLE_APPLICATION_CREDENTIALS should not be set
+    # If it's set to a non-existent file, unset it to use Application Default Credentials
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path and not os.path.exists(creds_path):
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    
+    try:
+        # Explicitly set project ID if available
+        if PROJECT_ID and PROJECT_ID != "your-project-id":
+            return firestore.Client(project=PROJECT_ID)
+        return firestore.Client()
+    except Exception as e:
+        print(f"❌ Error initializing Firestore client: {e}")
+        print(f"   PROJECT_ID: {PROJECT_ID}")
+        raise
 
 
 def _serialize_timestamp(value: DatetimeWithNanoseconds) -> str:
@@ -27,23 +44,37 @@ def upsert_user(user_info: Dict[str, Any]) -> None:
       - display_name
       - photo_url
     """
-    db = get_db()
-    user_id = user_info["user_id"]
+    try:
+        db = get_db()
+        user_id = user_info["user_id"]
 
-    doc_ref = db.collection("users").document(user_id)
-    payload: Dict[str, Any] = {
-        "email": user_info.get("email"),
-        "displayName": user_info.get("display_name"),
-        "photoUrl": user_info.get("photo_url"),
-    }
+        if not user_id:
+            raise ValueError("user_id is required for upsert_user")
 
-    doc_ref.set(
-        {
-            **payload,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        },
-        merge=True,
-    )
+        doc_ref = db.collection("users").document(user_id)
+        payload: Dict[str, Any] = {
+            "email": user_info.get("email"),
+            "displayName": user_info.get("display_name"),
+            "photoUrl": user_info.get("photo_url"),
+        }
+
+        # Add createdAt only if document doesn't exist (first time creation)
+        doc = doc_ref.get()
+        if not doc.exists:
+            payload["createdAt"] = firestore.SERVER_TIMESTAMP
+
+        doc_ref.set(
+            {
+                **payload,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        print(f"✅ User upserted successfully: {user_id} ({user_info.get('email')})")
+    except Exception as e:
+        print(f"❌ Error upserting user: {e}")
+        print(f"   user_info: {user_info}")
+        raise
 
 
 def create_project(
