@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class BRDSchema(BaseModel):
+    project_title: str = Field(description="A concise, catchy 4-5 word title for the project based on the idea.")
     problem_statement: str = Field(description="A clear, concise statement of the problem to be solved.")
     business_objectives: List[str] = Field(description="List of high-level business goals.")
     project_scope_in_scope: List[str] = Field(description="List of features and tasks that are included in the project.")

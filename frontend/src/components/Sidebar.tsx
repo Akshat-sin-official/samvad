@@ -3,7 +3,6 @@ import {
   Sparkles,
   LayoutGrid,
   ChevronDown,
-  FileText,
   Search,
   Plus,
   Settings as SettingsIcon,
@@ -33,18 +32,18 @@ const NavItem = ({
     onClick={onClick}
     disabled={disabled}
     className={`
-      w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium
-      transition-colors duration-150 ease-out
-      focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]
+      w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium
+      transition-all duration-200 ease-out
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f172a]
       disabled:opacity-50 disabled:cursor-not-allowed
       ${isActive
-        ? 'bg-slate-700/80 text-white'
-        : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+        ? 'bg-indigo-600/10 text-indigo-400 font-semibold'
+        : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
       }
       ${className}
     `}
   >
-    <Icon className="w-4 h-4 shrink-0 opacity-90" />
+    <Icon className="w-4 h-4 shrink-0" />
     <span className="truncate">{label}</span>
   </button>
 );
@@ -105,7 +104,7 @@ const LibraryDropdown = ({
         </button>
       </div>
       {isOpen && (
-        <div className="ml-3 pl-3 border-l border-slate-700/80 space-y-0.5">
+        <div className="ml-3 pl-3 py-1 border-l-2 border-slate-800 space-y-1">
           {brds.map((brd) => {
             const active = activeTab === brd.id;
             return (
@@ -115,19 +114,18 @@ const LibraryDropdown = ({
                 onClick={() => isLoggedIn && setActiveTab(brd.id)}
                 disabled={!isLoggedIn}
                 className={`
-                  w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-left text-xs
-                  transition-colors duration-150 ease-out
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]
+                  w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px]
+                  transition-all duration-200 ease-out
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60
                   disabled:opacity-50 disabled:cursor-not-allowed
                   ${active
-                    ? 'bg-slate-700/80 text-white'
-                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                    ? 'bg-indigo-600/10 text-indigo-400 font-medium'
+                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                   }
                 `}
               >
-                <FileText className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                <span className="truncate flex-1 font-medium">{brd.name}</span>
-                <span className={`shrink-0 text-[10px] ${active ? 'text-slate-400' : 'text-slate-500'}`}>{brd.updated}</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]' : 'bg-slate-600'}`} />
+                <span className="truncate flex-1">{brd.name}</span>
               </button>
             );
           })}

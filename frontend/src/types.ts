@@ -1,4 +1,5 @@
 export interface BRD {
+    project_title: string;
     problem_statement: string;
     business_objectives: string[];
     project_scope_in_scope: string[];
@@ -61,13 +62,35 @@ export interface GenerateResponse {
     gaps: GapAnalysis;
     data_model: DataModel;
     compliance: Compliance;
-    /** Optional until backend implements architecture agent. */
     architecture?: Architecture;
-    /** Optional until backend returns inference metadata. */
     metadata?: {
         confidence_score: number;
         tokens_used: number;
         models_consulted: string[];
         processing_time_ms: number;
     };
+}
+
+export interface ProjectVersion {
+    version: number;
+    idea: string;
+    title: string;
+    artifacts: GenerateResponse;
+    metadata: any;
+    createdAt: string;
+}
+
+export interface ProjectDetail {
+    id: string;
+    ownerId: string;
+    title: string;
+    description: string;
+    idea: string;
+    status: string;
+    currentVersion: number;
+    versions: ProjectVersion[];
+    artifacts: GenerateResponse;
+    lastRunMetadata: any;
+    createdAt?: string;
+    updatedAt?: string;
 }

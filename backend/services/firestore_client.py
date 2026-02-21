@@ -4,6 +4,7 @@ import os
 from google.cloud import firestore
 from google.cloud.firestore_v1 import Client
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds
+import datetime
 
 
 def get_db() -> Client:
@@ -98,10 +99,21 @@ def create_project(
         "description": description or "",
         "idea": idea,
         "status": "Active",
+        "currentVersion": 1,
         "artifacts": artifacts,
         "lastRunMetadata": metadata or {},
         "createdAt": firestore.SERVER_TIMESTAMP,
         "updatedAt": firestore.SERVER_TIMESTAMP,
+        "versions": [
+            {
+                "version": 1,
+                "idea": idea,
+                "title": title or "Untitled project",
+                "artifacts": artifacts,
+                "metadata": metadata or {},
+                "createdAt": datetime.datetime.now(datetime.timezone.utc),
+            }
+        ]
     }
 
     doc_ref.set(project_doc)
@@ -110,21 +122,48 @@ def create_project(
 
 def update_project_artifacts(
     project_id: str,
+    idea: str,
+    title: str,
     artifacts: Dict[str, Any],
     metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
-    Update artifacts and metadata for an existing project.
+    Update artifacts and metadata for an existing project, saving as a new version.
     """
     db = get_db()
     doc_ref = db.collection("projects").document(project_id)
-    doc_ref.update(
-        {
+    
+    # Run in transaction to securely increment version and append array
+    @firestore.transactional
+    def update_in_transaction(transaction, doc_ref):
+        snapshot = doc_ref.get(transaction=transaction)
+        if not snapshot.exists:
+            raise ValueError(f"Project {project_id} does not exist")
+        
+        current_data = snapshot.to_dict()
+        new_version = current_data.get("currentVersion", 1) + 1
+        
+        new_version_obj = {
+            "version": new_version,
+            "idea": idea,
+            "title": title,
+            "artifacts": artifacts,
+            "metadata": metadata or {},
+            "createdAt": datetime.datetime.now(datetime.timezone.utc),
+        }
+        
+        transaction.update(doc_ref, {
+            "idea": idea,
+            "title": title,
             "artifacts": artifacts,
             "lastRunMetadata": metadata or {},
+            "currentVersion": new_version,
             "updatedAt": firestore.SERVER_TIMESTAMP,
-        }
-    )
+            "versions": firestore.ArrayUnion([new_version_obj])
+        })
+        
+    transaction = db.transaction()
+    update_in_transaction(transaction, doc_ref)
 
 
 def list_projects_for_user(owner_id: str) -> List[Dict[str, Any]]:
@@ -181,6 +220,8 @@ def get_project_for_user(owner_id: str, project_id: str) -> Optional[Dict[str, A
         "description": data.get("description"),
         "idea": data.get("idea"),
         "status": data.get("status"),
+        "currentVersion": data.get("currentVersion", 1),
+        "versions": data.get("versions", []),
         "artifacts": data.get("artifacts") or {},
         "lastRunMetadata": data.get("lastRunMetadata") or {},
         "createdAt": _serialize_timestamp(created_at)
@@ -190,4 +231,12 @@ def get_project_for_user(owner_id: str, project_id: str) -> Optional[Dict[str, A
         if isinstance(updated_at, DatetimeWithNanoseconds)
         else updated_at,
     }
+
+    # Format timestamps inside versions array
+    for v in result["versions"]:
+        v_created_at = v.get("createdAt")
+        if isinstance(v_created_at, DatetimeWithNanoseconds):
+            v["createdAt"] = _serialize_timestamp(v_created_at)
+
+    return result
 

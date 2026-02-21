@@ -14,16 +14,17 @@ Raw Idea:
 {idea}
 
 Your task:
-1. Write a sharp, clear PROBLEM STATEMENT that frames the pain point and opportunity.
-2. Define 4–6 concrete BUSINESS OBJECTIVES that are measurable.
-3. Clearly delineate what is IN SCOPE and OUT OF SCOPE.
-4. Identify all USER ROLES who will interact with the system.
-5. List 8–12 specific FUNCTIONAL REQUIREMENTS.
-6. List 5–8 NON-FUNCTIONAL REQUIREMENTS (performance, security, scalability, etc.).
-7. Outline key DATA REQUIREMENTS (types of data, retention, processing needs).
-8. Define 4–6 KPIs to measure project success.
-9. List ASSUMPTIONS made.
-10. Identify 4–6 key project RISKS.
+1. Generate a catchy 4-5 word PROJECT TITLE based on the core idea.
+2. Write a sharp, clear PROBLEM STATEMENT that frames the pain point and opportunity.
+3. Define 4–6 concrete BUSINESS OBJECTIVES that are measurable.
+4. Clearly delineate what is IN SCOPE and OUT OF SCOPE.
+5. Identify all USER ROLES who will interact with the system.
+6. List 8–12 specific FUNCTIONAL REQUIREMENTS.
+7. List 5–8 NON-FUNCTIONAL REQUIREMENTS (performance, security, scalability, etc.).
+8. Outline key DATA REQUIREMENTS (types of data, retention, processing needs).
+9. Define 4–6 KPIs to measure project success.
+10. List ASSUMPTIONS made.
+11. Identify 4–6 key project RISKS.
 
 Output must be strict JSON matching the following schema:
 {schema}

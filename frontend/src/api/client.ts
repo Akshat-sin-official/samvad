@@ -75,6 +75,7 @@ export interface GenerateRequestPayload {
 
 export interface GenerateApiResponse {
   project_id: string;
+  project_title: string;
   artifacts: GenerateResponse;
   metadata?: GenerateResponse['metadata'];
 }

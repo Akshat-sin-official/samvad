@@ -17,7 +17,7 @@ import {
   Share2, ChevronRight, BrainCircuit, Server,
   FileText, Database, ShieldAlert,
 } from 'lucide-react';
-import type { GenerateResponse } from './types';
+import type { GenerateResponse, ProjectVersion, ProjectDetail } from './types';
 import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser } from './api/client';
 import { SearchBRDPopup } from './components/SearchBRDPopup';
 import type { BRDListItem } from './components/SearchBRDPopup';
@@ -56,6 +56,9 @@ function App() {
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectTitle, setProjectTitle] = useState<string>("New Architecture Request");
+  const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<number>(1);
 
   // Show login modal if not authenticated and auth has finished loading
   useEffect(() => {
@@ -146,9 +149,23 @@ function App() {
     setResult(null);
 
     try {
-      const { project_id, artifacts } = await generateBRD({ idea });
+      const payload = {
+        idea,
+        ...(selectedProjectId ? { project_id: selectedProjectId } : {})
+      };
+
+      const { project_id, artifacts, project_title } = await generateBRD(payload);
+
+      // Update local state temporarily
       setResult(artifacts);
       setSelectedProjectId(project_id);
+      if (project_title) setProjectTitle(project_title);
+
+      // Force fetch full project to get the newly appended version array
+      const full = await fetchProjectById(project_id) as ProjectDetail;
+      setVersions(full.versions || []);
+      setCurrentVersion(full.currentVersion || 1);
+
       const list = await fetchProjects();
       setProjects(list);
     } catch (err: unknown) {
@@ -178,6 +195,9 @@ function App() {
     setResult(null);
     setIdea('');
     setSelectedProjectId(null);
+    setProjectTitle("New Architecture Request");
+    setVersions([]);
+    setCurrentVersion(1);
   };
 
   const handleCloseModal = () => {
@@ -188,11 +208,24 @@ function App() {
     setActiveTab('new_project');
     setSelectedProjectId(id);
     try {
-      const full = await fetchProjectById(id);
+      const full = await fetchProjectById(id) as ProjectDetail;
       setIdea(full.idea || '');
-      setResult(full.artifacts as GenerateResponse);
+      setResult(full.artifacts);
+      setProjectTitle(full.title || full.artifacts.brd?.project_title || "Untitled project");
+      setVersions(full.versions || []);
+      setCurrentVersion(full.currentVersion || 1);
     } catch {
       setError('Failed to load project.');
+    }
+  };
+
+  const handleVersionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetVer = parseInt(e.target.value, 10);
+    const versionObj = versions.find(v => v.version === targetVer);
+    if (versionObj) {
+      setCurrentVersion(versionObj.version);
+      setIdea(versionObj.idea);
+      setResult(versionObj.artifacts);
     }
   };
 
@@ -224,17 +257,33 @@ function App() {
       case 'new_project':
       default:
         return (
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
+          <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+
+            {/* Ambient Background for entire app */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10 bg-slate-50/50">
+              <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-400/10 blur-[120px]" />
+              <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] rounded-full bg-blue-400/10 blur-[120px]" />
+              <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] rounded-full bg-violet-400/10 blur-[100px]" />
+            </div>
+
             {/* Top Header */}
-            <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
+            <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 shrink-0 z-20 shadow-sm">
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-slate-500">Projects</span>
                 <ChevronRight className="w-4 h-4 text-slate-300" />
-                <span className="font-medium text-slate-900">New Architecture Request</span>
-                {result && (
+                <span className="font-medium text-slate-900 truncate max-w-[300px]" title={projectTitle}>{projectTitle}</span>
+                {result && versions.length > 0 && (
                   <>
                     <ChevronRight className="w-4 h-4 text-slate-300" />
-                    <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-mono">v1.0</span>
+                    <select
+                      value={currentVersion}
+                      onChange={handleVersionChange}
+                      className="bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 transition-colors px-2.5 py-1 rounded-md text-[13px] font-mono border border-indigo-100 focus:ring-2 focus:ring-indigo-500 cursor-pointer outline-none shadow-sm"
+                    >
+                      {versions.map(v => (
+                        <option key={v.version} value={v.version}>v{v.version}.0</option>
+                      ))}
+                    </select>
                   </>
                 )}
               </div>

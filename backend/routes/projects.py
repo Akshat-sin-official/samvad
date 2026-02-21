@@ -46,6 +46,7 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     project_id: str
+    project_title: str
     artifacts: dict
     metadata: Optional[dict] = None
 
@@ -92,16 +93,19 @@ def generate_and_persist(request: GenerateRequest, current_user: CurrentUser = C
         "data_model": orchestration_result["data_model"],
         "compliance": orchestration_result["compliance"],
     }
+    
+    # Extract the auto-generated title
+    auto_title = artifacts["brd"].get("project_title") or request.title or "Untitled project"
 
     metadata = orchestration_result.get("metadata") or {}
 
     if request.project_id:
-        update_project_artifacts(request.project_id, artifacts, metadata)
+        update_project_artifacts(request.project_id, request.idea, auto_title, artifacts, metadata)
         project_id = request.project_id
     else:
         project_id = create_project(
             owner_id=current_user.user_id,
-            title=request.title,
+            title=auto_title,
             description=request.description,
             idea=request.idea,
             artifacts=artifacts,
@@ -110,6 +114,7 @@ def generate_and_persist(request: GenerateRequest, current_user: CurrentUser = C
 
     return GenerateResponse(
         project_id=project_id,
+        project_title=auto_title,
         artifacts=artifacts,
         metadata=metadata,
     )
