@@ -18,7 +18,7 @@ import {
   FileText, Database, ShieldAlert,
 } from 'lucide-react';
 import type { GenerateResponse, ProjectVersion, ProjectDetail } from './types';
-import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser } from './api/client';
+import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser, verify2FA } from './api/client';
 import { SearchBRDPopup } from './components/SearchBRDPopup';
 import type { BRDListItem } from './components/SearchBRDPopup';
 import { useAuth } from './auth';
@@ -44,6 +44,77 @@ const TransparencyFooter = ({ metadata }: { metadata?: GenerateResponse['metadat
   )
 }
 
+// --- 2FA Gate ---
+export const TwoFactorGate = ({ onVerify, onCancel }: { onVerify: (code: string) => Promise<void>, onCancel: () => void }) => {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.length < 6) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await onVerify(code);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Invalid verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans antialiased text-slate-900">
+      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+        <div className="flex flex-col items-center text-center space-y-4 mb-8">
+          <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold tracking-tight">Two-Step Verification</h2>
+            <p className="text-sm text-slate-500 font-medium">Enter the 6-digit code from your authenticator app.</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl font-medium tracking-wide">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            maxLength={6}
+            placeholder="000000"
+            className="w-full h-12 text-center text-2xl font-mono tracking-widest bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+            autoFocus
+          />
+          <div className="space-y-3">
+            <button
+              type="submit"
+              disabled={code.length < 6 || loading}
+              className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center tracking-wide"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Verify'}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full h-11 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 font-medium rounded-xl transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const { user, loading: authLoading, signOutUser } = useAuth();
   const isLoggedIn = !!(user && (user.providerData[0]?.providerId !== 'password' || user.emailVerified));
@@ -58,6 +129,10 @@ function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState<string>("New Architecture Request");
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
+
+  // Custom 2FA API State
+  const [is2faEnabled, setIs2faEnabled] = useState(false);
+  const [is2faVerified, setIs2faVerified] = useState(false);
   const [currentVersion, setCurrentVersion] = useState<number>(1);
 
   // Show login modal if not authenticated and auth has finished loading
@@ -92,7 +167,8 @@ function App() {
 
     const initializeUser = async () => {
       try {
-        await fetchCurrentUser();
+        const res = await fetchCurrentUser();
+        setIs2faEnabled(res.settings?.is2faEnabled || false);
       } catch (e: unknown) {
         const err = e as { response?: { status?: number }; message?: string };
         if (err.response?.status === 401) {
@@ -477,6 +553,19 @@ function App() {
           </div>
         );
     }
+  }
+
+  // Application-level 2FA Gate
+  if (isLoggedIn && is2faEnabled && !is2faVerified) {
+    return (
+      <TwoFactorGate
+        onVerify={async (code) => {
+          await verify2FA(code);
+          setIs2faVerified(true);
+        }}
+        onCancel={() => signOutUser().then(() => setIs2faVerified(false))}
+      />
+    );
   }
 
   return (

@@ -119,3 +119,23 @@ export const updateUserSettings = async (payload: UserSettingsPayload) => {
   const response = await apiClient.put('/users/me', payload);
   return response.data;
 };
+
+export const setup2FA = async () => {
+  const response = await apiClient.post('/users/me/2fa/setup');
+  return response.data;
+};
+
+export const enable2FA = async (code: string) => {
+  const response = await apiClient.post('/users/me/2fa/enable', { code });
+  return response.data;
+};
+
+export const verify2FA = async (code: string) => {
+  const response = await apiClient.post('/users/me/2fa/verify', { code });
+  return response.data;
+};
+
+export const disable2FA = async () => {
+  const response = await apiClient.post('/users/me/2fa/disable');
+  return response.data;
+};
