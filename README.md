@@ -7,7 +7,7 @@
 
 ## 1. Project Overview
 
-This system is a deterministic multi-agent AI workflow engine that converts raw business ideas into enterprise-ready technical documentation. It orchestrates a sequential pipeline using Google Cloud Vertex AI (Gemini 1.5 Pro & Flash) to generate:
+This system is a deterministic multi-agent AI workflow engine that converts raw business ideas into enterprise-ready technical documentation. It orchestrates a sequential pipeline using Google Cloud Vertex AI (Gemini 2.0 Flash & Flash Lite) to generate:
 
 1.  **Structured Business Requirements Document (BRD)**
 2.  **Gap & Risk Analysis**
@@ -22,10 +22,10 @@ The output is always strictly structured JSON, validated against Pydantic schema
 
 ### **Generative AI Pipeline**
 - **Multi-Agent Orchestration**: Specialized agents handle individual steps of the architectural breakdown.
-    - `BRD Agent` (Gemini 1.5 Pro): Requirements generation.
-    - `Gap Agent` (Gemini 1.5 Pro): Logic critique.
-    - `Data Agent` (Gemini 1.5 Pro): Entity-Relationship modeling.
-    - `Compliance Agent` (Gemini 1.5 Flash): Regulatory risk audit.
+    - `BRD Agent` (Gemini 2.0 Flash): Requirements generation.
+    - `Gap Agent` (Gemini 2.0 Flash): Logic critique.
+    - `Data Agent` (Gemini 2.0 Flash): Entity-Relationship modeling.
+    - `Compliance Agent` (Gemini 2.0 Flash Lite): Regulatory risk audit.
 - **Pydantic Validation**: All Agent outputs are strictly enforced via Pydantic schema validation.
 
 ### **Authentication & Security**
