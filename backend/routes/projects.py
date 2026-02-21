@@ -39,6 +39,7 @@ class ProjectDetail(BaseModel):
 
 class GenerateRequest(BaseModel):
     idea: str
+    context_data: Optional[str] = None
     project_id: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
@@ -85,7 +86,7 @@ def generate_and_persist(request: GenerateRequest, current_user: CurrentUser = C
             detail="Idea must not be empty",
         )
 
-    orchestration_result = orchestrate_brd_generation(request.idea)
+    orchestration_result = orchestrate_brd_generation(request.idea, current_user.user_id, request.context_data)
 
     artifacts = {
         "brd": orchestration_result["brd"],

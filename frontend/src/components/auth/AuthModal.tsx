@@ -96,7 +96,7 @@ export const AuthModal = ({ onClose, error: externalError }: AuthModalProps) => 
 
                     {/* Footer */}
                     <p className="relative z-10 text-xs text-indigo-300">
-                        © 2026 Samvad.ai · Trusted by 500+ teams
+                        © 2026 Samvad.ai
                     </p>
                 </div>
 

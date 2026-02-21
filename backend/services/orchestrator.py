@@ -10,7 +10,7 @@ from .architecture_agent import generate_architecture
 from ..config import GEMINI_25_PRO_MODEL_ID, GEMINI_PRO_MODEL_ID, GEMINI_FLASH_MODEL_ID
 
 
-def orchestrate_brd_generation(idea: str, user_id: str) -> Dict[str, Any]:
+def orchestrate_brd_generation(idea: str, user_id: str, context_data: str = None) -> Dict[str, Any]:
     """
     Orchestrates the full BRD generation pipeline with partial parallelism.
 
@@ -26,7 +26,7 @@ def orchestrate_brd_generation(idea: str, user_id: str) -> Dict[str, Any]:
     # ------- Step 1: BRD (sequential — all other agents depend on this) -------
     print("[Orchestrator] Step 1: Generating BRD with gemini-2.5-pro...")
     t0 = time.time()
-    brd = generate_brd(idea)
+    brd = generate_brd(idea, context_data)
     models_used.add(GEMINI_25_PRO_MODEL_ID)
     print(f"[Orchestrator] BRD done in {time.time() - t0:.1f}s")
 

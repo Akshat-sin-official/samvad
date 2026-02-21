@@ -15,7 +15,7 @@ import {
   Loader2, Sparkles, CheckCircle2, PlayCircle,
   FolderGit2, Bell,
   Share2, ChevronRight, BrainCircuit, Server,
-  FileText, Database, ShieldAlert,
+  FileText, Database, ShieldAlert, UploadCloud,
 } from 'lucide-react';
 import type { GenerateResponse, ProjectVersion, ProjectDetail } from './types';
 import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser, verify2FA } from './api/client';
@@ -121,6 +121,8 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeTab, setActiveTab] = useState('new_project');
   const [idea, setIdea] = useState('');
+  const [contextData, setContextData] = useState<string>('');
+  const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,6 +229,7 @@ function App() {
     try {
       const payload = {
         idea,
+        ...(contextData ? { context_data: contextData } : {}),
         ...(selectedProjectId ? { project_id: selectedProjectId } : {})
       };
 
@@ -270,6 +273,8 @@ function App() {
     setActiveTab('new_project');
     setResult(null);
     setIdea('');
+    setContextData('');
+    setFileName(null);
     setSelectedProjectId(null);
     setProjectTitle("New Architecture Request");
     setVersions([]);
@@ -286,6 +291,8 @@ function App() {
     try {
       const full = await fetchProjectById(id) as ProjectDetail;
       setIdea(full.idea || '');
+      setContextData('');
+      setFileName(null);
       setResult(full.artifacts);
       setProjectTitle(full.title || full.artifacts.brd?.project_title || "Untitled project");
       setVersions(full.versions || []);
@@ -301,6 +308,8 @@ function App() {
     if (versionObj) {
       setCurrentVersion(versionObj.version);
       setIdea(versionObj.idea);
+      setContextData('');
+      setFileName(null);
       setResult(versionObj.artifacts);
     }
   };
@@ -399,15 +408,68 @@ function App() {
                 </div>
 
                 <div className="p-5 flex-1 overflow-y-auto">
-                  <label className="text-sm font-medium text-slate-700 mb-2 block">Problem Statement</label>
+                  <label className="text-sm font-medium text-slate-700 mb-2 block">Guiding Directions</label>
                   <Textarea
-                    placeholder="Describe the application you want to build..."
-                    className="min-h-[200px] text-sm leading-relaxed resize-none bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                    placeholder="E.g. Extract all project requirements, timelines, and stakeholder decisions. Ignore scheduling and unrelated chatter."
+                    className="min-h-[100px] text-sm leading-relaxed resize-none bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                     value={idea}
                     onChange={(e) => setIdea(e.target.value)}
                   />
 
-                  <div className="mt-6">
+                  {/* File Upload Zone */}
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-slate-700 mb-2 block">Upload Communication Data <span className="text-slate-400 font-normal">(emails, transcripts, .txt/.csv/.md)</span></label>
+                    <div
+                      className={`relative border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer ${contextData ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/30'
+                        }`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setContextData(ev.target?.result as string || '');
+                          setFileName(file.name);
+                        };
+                        reader.readAsText(file);
+                      }}
+                      onClick={() => document.getElementById('file-upload-input')?.click()}
+                    >
+                      <input
+                        id="file-upload-input"
+                        type="file"
+                        accept=".txt,.csv,.md"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setContextData(ev.target?.result as string || '');
+                            setFileName(file.name);
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                      {contextData ? (
+                        <div className="flex flex-col items-center gap-1.5">
+                          <FileText className="w-6 h-6 text-indigo-500" />
+                          <p className="text-xs font-medium text-indigo-700">{fileName}</p>
+                          <p className="text-xs text-slate-500">{(contextData.length / 1024).toFixed(1)} KB of text loaded</p>
+                          <button onClick={(e) => { e.stopPropagation(); setContextData(''); setFileName(null); }} className="mt-1 text-xs text-red-500 hover:underline">Remove</button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <UploadCloud className="w-8 h-8 text-slate-300" />
+                          <p className="text-xs text-slate-500">Drag & drop a file here, or <span className="text-indigo-500 font-medium">click to browse</span></p>
+                          <p className="text-xs text-slate-400">.txt, .csv, .md supported</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
                     <Button
                       className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-sm"
                       disabled={loading || !idea.trim()}
@@ -424,19 +486,19 @@ function App() {
                     </div>
                   )}
 
-                  {/* Project Meta (Mock) */}
+                  {/* Project Meta — real data from current session */}
                   <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Owner</span>
-                      <span className="font-medium">John Doe</span>
+                      <span className="font-medium truncate max-w-[160px]">{user?.displayName || user?.email || '—'}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Created</span>
-                      <span className="font-medium">Just now</span>
+                      <span className="text-slate-500">Project</span>
+                      <span className="font-medium truncate max-w-[160px]">{selectedProjectId ? projectTitle : 'Not saved yet'}</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Visibility</span>
-                      <span className="font-medium">Team Private</span>
+                      <span className="font-medium">Private</span>
                     </div>
                   </div>
                 </div>

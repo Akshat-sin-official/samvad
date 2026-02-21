@@ -68,6 +68,7 @@ apiClient.interceptors.response.use(
 
 export interface GenerateRequestPayload {
   idea: string;
+  context_data?: string;
   project_id?: string;
   title?: string;
   description?: string;
