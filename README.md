@@ -7,65 +7,97 @@
 
 ## 1. Project Overview
 
-This system is a deterministic multi-agent AI workflow engine that converts raw business ideas into enterprise-ready technical documentation. It is NOT a chatbot. It orchestrates a sequential pipeline using Google Cloud Vertex AI (Gemini 1.5 Pro & Flash) to generate:
+This system is a deterministic multi-agent AI workflow engine that converts raw business ideas into enterprise-ready technical documentation. It orchestrates a sequential pipeline using Google Cloud Vertex AI (Gemini 1.5 Pro & Flash) to generate:
 
 1.  **Structured Business Requirements Document (BRD)**
 2.  **Gap & Risk Analysis**
 3.  **Normalized Data Dictionary (Database Schema)**
 4.  **Compliance & Security Audit (PII, GDPR, Encryption)**
 
-The output is strictly structured JSON, validated against Pydantic schemas to ensure engineering reliability.
+The output is always strictly structured JSON, validated against Pydantic schemas to ensure engineering reliability, and rendered dynamically on the frontend.
 
 ---
 
-## 2. Architecture Explanation
+## 2. Key Features Implemented
+
+### **Generative AI Pipeline**
+- **Multi-Agent Orchestration**: Specialized agents handle individual steps of the architectural breakdown.
+    - `BRD Agent` (Gemini 1.5 Pro): Requirements generation.
+    - `Gap Agent` (Gemini 1.5 Pro): Logic critique.
+    - `Data Agent` (Gemini 1.5 Pro): Entity-Relationship modeling.
+    - `Compliance Agent` (Gemini 1.5 Flash): Regulatory risk audit.
+- **Pydantic Validation**: All Agent outputs are strictly enforced via Pydantic schema validation.
+
+### **Authentication & Security**
+- **Firebase Authentication**: Full integration with Firebase for JWT-based Email/Password and Google OAuth login flows.
+- **Custom Application-Level 2FA (TOTP)**: 
+  - Complete backend integration logic built in Python utilizing `pyotp` and Firebase Firestore to securely store generated secrets.
+  - Interactive "Enable 2FA" panel to instantly generate and display QR codes for Authenticator Apps (Authy, Google Authenticator).
+  - Secure React app-level `TwoFactorGate` interceptor enforcing a TOTP challenge upon every fresh sign-in if 2FA is toggled on.
+- **Environment & Secret Protection**: `.env` and `.gitignore` configured to securely house API keys and secrets. 
+
+### **UI / UX Features**
+- **Sleek Enterprise Design Pattern**:
+  - React 18 frontend leveraging Tailwind CSS & Radix UI primitives.
+  - Granular application states with smooth `framer-motion` animations, minimal monochromatic toast alerts, and a professional aesthetic.
+- **Account & Project Settings**:
+  - Comprehensive user settings dashboard to view and tweak profile options, security preferences, password resets, and 2FA states.
+- **Project Versioning & History**:
+  - Persistent storage in Firestore, allowing users to save multiple Projects and quickly toggle between historical architectural generation versions per project.
+
+---
+
+## 3. Architecture & Tech Stack
 
 ### **Frontend**
-- **Tech Stack**: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion, Radix UI (Shadcn-like).
-- **Design Logic**: Split-screen interface. Left panel for input, Right panel for multi-tabbed structured output.
-- **Key Features**: Real-time loading states, copy-to-clipboard, responsive layout, dark-mode inspired "Enterprise" aesthetic.
+- **Framework**: React 18, Vite, TypeScript
+- **Styling**: Tailwind CSS, Framer Motion, Radix UI (Shadcn-inspired components)
+- **State Management**: `zustand` / React Context (`useAuth`)
+- **API Communication**: `axios` with JWT request interceptors
 
 ### **Backend**
-- **Tech Stack**: Python 3.11, FastAPI, Uvicorn, Vertex AI SDK.
-- **Agent Design**:
-    - `BRD Agent` (Gemini 1.5 Pro): Generates requirements.
-    - `Gap Agent` (Gemini 1.5 Pro): Critiques the BRD for missing logic.
-    - `Data Agent` (Gemini 1.5 Pro): Transforms BRD into Entity-Relationship models.
-    - `Compliance Agent` (Gemini 1.5 Flash): Audits data models for regulatory risks.
-- **Orchestration**: A linear, deterministic pipeline ensuring `Input -> BRD -> Gap -> Model -> Compliance`.
+- **Framework**: Python 3.11+, FastAPI, Uvicorn
+- **AI Core**: Google Vertex AI SDK (`google-genai`)
+- **Database**: Google Cloud Firestore (Firebase Admin SDK)
+- **Authentication**: JWT token validation mirroring Firebase Auth
+- **Security Utilities**: `pyotp` (TOTP generation), `qrcode`
 
 ---
 
-## 3. Setup Steps (Local)
+## 4. Setup Steps (Local Development)
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- Google Cloud Project with Vertex AI API enabled.
+- Google Cloud Project with the **Vertex AI API** enabled.
+- Firebase Project configured and enabled.
 
 ### Backend Setup
 1. Navigate to `/backend`:
    ```bash
    cd backend
    ```
-2. Create virtual environment:
+2. Create and activate the virtual environment:
    ```bash
    python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
+   # Mac/Linux:
+   source venv/bin/activate  
+   # Windows:
+   .\venv\Scripts\activate
    ```
-3. Install dependencies:
+3. Install strict dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 4. Configure Environment:
    - Copy `.env.example` to `.env`
-   - Fill in `PROJECT_ID` and `LOCATION`.
-   - Ensure you have Google Application Credentials set up (run `gcloud auth application-default login` or set `GOOGLE_APPLICATION_CREDENTIALS` path).
-
+   - Fill in your `PROJECT_ID` and `LOCATION`.
+   - Ensure your Firebase Private Key JSON file path is correctly linked to `GOOGLE_APPLICATION_CREDENTIALS` (or run `gcloud auth application-default login`).
 5. Run Server:
    ```bash
    uvicorn backend.main:app --reload --port 8080
    ```
+   *Note: if dealing with relative imports from the root folder, run `python -m uvicorn backend.main:app --reload --port 8080` from the root directory instead.*
 
 ### Frontend Setup
 1. Navigate to `/frontend`:
@@ -76,38 +108,26 @@ The output is strictly structured JSON, validated against Pydantic schemas to en
    ```bash
    npm install
    ```
-3. Run Development Server:
+3. Configure Environment:
+   - Copy `.env.example` to `.env`.
+   - Insert your Firebase Configuration keys (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, etc).
+4. Run Development Server:
    ```bash
    npm run dev
    ```
-4. Open `http://localhost:5173` in your browser.
+5. Open `http://localhost:5173` in your browser.
 
 ---
 
-## 4. Vertex AI Setup Guide
+## 5. Firebase & Vertex AI Setup Guide
 
-1. **Create a Google Cloud Project**: Go to [Google Cloud Console](https://console.cloud.google.com/).
-2. **Enable Vertex AI API**: Search for "Vertex AI" and enable the API.
-3. **Authentication**:
-   - For local development: Install `gcloud` CLI and run `gcloud auth application-default login`.
-   - For Cloud Run: Create a Service Account with `Vertex AI User` role.
+1. **Google Cloud Project**: Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project. Enable the **Vertex AI** billing API.
+2. **Firebase Auth**: Go to the [Firebase Console](https://console.firebase.google.com/), add your GCP project, and initialize the **Authentication** and **Firestore Database** modules. 
+3. **Admin SDK**: Under Project Settings > Service Accounts, generate a new Private Key and save it securely on your backend (e.g., `backend/firebase_key.json`).
 
 ---
 
-## 5. Environment Variable Configuration
-
-Create a `.env` file in `backend/` based on `.env.example`:
-
-```env
-PROJECT_ID=your-gcp-project-id
-LOCATION=us-central1
-# Optional if using default credentials
-# GOOGLE_APPLICATION_CREDENTIALS=keywords/key.json 
-```
-
----
-
-## 6. Docker Build Instructions
+## 6. Deployment (Docker & Cloud Run)
 
 To containerize the backend for production:
 
@@ -115,23 +135,14 @@ To containerize the backend for production:
    ```bash
    docker build -t auto-brd-backend ./backend
    ```
-
-2. **Run container locally**:
+2. **Run container locally to test**:
    ```bash
    docker run -p 8080:8080 -e PROJECT_ID=your-id -e LOCATION=us-central1 -v ~/.config/gcloud:/root/.config/gcloud auto-brd-backend
    ```
-
----
-
-## 7. Cloud Run Deployment Steps
-
-1. **Submit Build to Container Registry/Artifact Registry**:
+3. **Deploy to Cloud Run via gcloud CLI**:
    ```bash
    gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/auto-brd-backend ./backend
-   ```
-
-2. **Deploy to Cloud Run**:
-   ```bash
+   
    gcloud run deploy auto-brd-backend \
      --image gcr.io/YOUR_PROJECT_ID/auto-brd-backend \
      --platform managed \
@@ -139,11 +150,10 @@ To containerize the backend for production:
      --allow-unauthenticated \
      --set-env-vars PROJECT_ID=YOUR_PROJECT_ID,LOCATION=us-central1
    ```
-
-3. **Frontend Deployment**:
-   - Build frontend: `npm run build`
-   - Deploy `dist/` to structure hosting (Firebase Hosting, Vercel, or GCS bucket).
+4. **Deploy Frontend**:
+   - `npm run build` inside `/frontend`.
+   - Take the output folder `dist/` and deploy it onto Firebase Hosting, Vercel, or AWS S3. 
 
 ---
 
-**Built for the Hackathon 2026.**
+**Built for Hackathon 2026.**
