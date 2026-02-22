@@ -15,13 +15,13 @@ import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import {
-  Loader2, Sparkles, CheckCircle2, PlayCircle,
+  Loader2, Sparkles, CheckCircle2,
   FolderGit2, Bell,
   Share2, ChevronRight, BrainCircuit, Server,
   FileText, Database, ShieldAlert, UploadCloud, AlertTriangle, Link2, Download, Users, Save,
 } from 'lucide-react';
 import type { GenerateResponse, ProjectVersion, ProjectDetail, NoiseStats } from './types';
-import { generateBRD, fetchProjects, type ProjectSummary, fetchProjectById, setAuthTokenGetter, fetchCurrentUser, verify2FA, updateProjectTitle } from './api/client';
+import { generateBRD, fetchProjects, type ProjectSummary, type GenerateRequestPayload, fetchProjectById, setAuthTokenGetter, fetchCurrentUser, verify2FA, updateProjectTitle } from './api/client';
 import { SearchBRDPopup } from './components/SearchBRDPopup';
 import type { BRDListItem } from './components/SearchBRDPopup';
 import { useAuth } from './auth';
@@ -302,7 +302,7 @@ function App() {
 
     try {
       const useDataset = overrides?.useDataset ?? useDatasetFile;
-      const payload: Record<string, unknown> = {
+      const payload: GenerateRequestPayload = {
         idea,
         ...(selectedProjectId ? { project_id: selectedProjectId } : {}),
       };

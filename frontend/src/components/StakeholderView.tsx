@@ -97,7 +97,7 @@ function buildMermaidDiagram(stakeholders: StakeholderItem[]): string {
 
     const levels = ([1, 2, 3, 4] as const).filter(l => byLevel[l]?.length);
 
-    levels.forEach((level, idx) => {
+    levels.forEach((level) => {
         const members = byLevel[level];
         const subId = `L${level}`;
         const emoji = LEVEL_META[level]?.icon ?? '•';

@@ -112,6 +112,9 @@ export interface GenerateResponse {
         health_score?: number;
         noise_stats?: NoiseStats;
         channel_count?: number;
+        used_dataset_sample?: boolean;
+        dataset_file_name?: string;
+        dataset_sample_chars?: number;
     };
 }
 
