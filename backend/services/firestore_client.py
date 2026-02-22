@@ -166,6 +166,24 @@ def update_project_artifacts(
     update_in_transaction(transaction, doc_ref)
 
 
+def update_project_title(project_id: str, owner_id: str, title: str) -> None:
+    """
+    Update only the project title (and updatedAt). Fails if project does not exist or owner does not match.
+    """
+    db = get_db()
+    doc_ref = db.collection("projects").document(project_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise ValueError(f"Project {project_id} does not exist")
+    data = doc.to_dict()
+    if data.get("ownerId") != owner_id:
+        raise ValueError("Project not found or access denied")
+    doc_ref.update({
+        "title": title or "Untitled project",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+
+
 def list_projects_for_user(owner_id: str) -> List[Dict[str, Any]]:
     """
     Return lightweight project summaries for a given user.

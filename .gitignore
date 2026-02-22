@@ -1,6 +1,8 @@
 # General
 .DS_Store
 .vscode/
+dataset/
+docs/
 
 # Python
 **/__pycache__/

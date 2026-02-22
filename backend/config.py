@@ -14,6 +14,10 @@ VERTEX_PROJECT_ID = os.getenv("VERTEX_PROJECT_ID", os.getenv("PROJECT_ID", "your
 
 LOCATION = os.getenv("LOCATION", "us-central1")
 
+# --- Dataset (Enron emails for hackathon / BRD context) ---
+# Optional: override path to emails CSV (e.g. for Cloud Run volume mount)
+DATASET_EMAILS_CSV_PATH = os.getenv("DATASET_EMAILS_CSV_PATH", "")
+
 # --- Model IDs ---
 # NOTE: gemini-2.5-pro-preview-03-25 requires project allowlisting.
 # Using gemini-2.0-flash-001 (GA, always available) for BRD and Architecture.

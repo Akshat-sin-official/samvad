@@ -3,9 +3,10 @@ import type { GenerateResponse } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
+// The token getter — set once Firebase auth is resolved with a real user
 let tokenGetter: (() => Promise<string | null>) | null = null;
 
-export const setAuthTokenGetter = (getter: () => Promise<string | null>) => {
+export const setAuthTokenGetter = (getter: (() => Promise<string | null>) | null) => {
   tokenGetter = getter;
 };
 
@@ -16,7 +17,12 @@ export const apiClient = axios.create({
   },
 });
 
-/** Attach Bearer token to every outgoing request */
+/**
+ * Attach Bearer token to every outgoing request.
+ * If tokenGetter is null or returns null (user not yet authenticated),
+ * the request is still sent but without an auth header — the backend
+ * will return 401, which triggers the retry interceptor below.
+ */
 apiClient.interceptors.request.use(async (config) => {
   if (tokenGetter) {
     try {
@@ -25,37 +31,41 @@ apiClient.interceptors.request.use(async (config) => {
         config.headers = config.headers || {};
         config.headers['Authorization'] = `Bearer ${token}`;
       } else {
-        console.warn('[API] No token available for request:', config.url);
+        console.warn('[API] tokenGetter returned null for:', config.url);
       }
     } catch (e) {
       console.error('[API] Token getter threw:', e);
     }
+  } else {
+    console.warn('[API] No tokenGetter registered yet for:', config.url);
   }
   return config;
 });
 
 /**
- * On 401, force-refresh the token and retry the request exactly once.
- * This handles the race condition where the token getter is registered
- * before Firebase has fully resolved the session.
+ * On 401: force-refresh the Firebase ID token and retry the request once.
+ * This handles:
+ *  - Expired tokens (>1 hour)
+ *  - Race condition where tokenGetter is registered but user.getIdToken was
+ *    served from a stale cache at request time
  */
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Only retry once; skip if no tokenGetter or already retried
     if (error.response?.status === 401 && !originalRequest._retry && tokenGetter) {
       originalRequest._retry = true;
-      console.warn('[API] 401 received — force-refreshing token and retrying...');
+      console.warn('[API] 401 — force-refreshing Firebase token and retrying:', originalRequest.url);
       try {
-        // Force Firebase to issue a fresh token (bypasses the 1-hour cache)
-        // tokenGetter should call user.getIdToken(true) for force refresh
+        // forceRefresh=true bypasses the Firebase 1-hour token cache
         const freshToken = await tokenGetter();
         if (freshToken) {
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers['Authorization'] = `Bearer ${freshToken}`;
           return apiClient(originalRequest);
+        } else {
+          console.error('[API] Retry aborted: force-refreshed token is still null.');
         }
       } catch (refreshErr) {
         console.error('[API] Token refresh failed during retry:', refreshErr);
@@ -69,9 +79,11 @@ apiClient.interceptors.response.use(
 export interface GenerateRequestPayload {
   idea: string;
   context_data?: string;
+  context_data_2?: string;
   project_id?: string;
   title?: string;
   description?: string;
+  selected_model?: string;
 }
 
 export interface GenerateApiResponse {
@@ -101,6 +113,17 @@ export const fetchProjects = async (): Promise<ProjectSummary[]> => {
 
 export const fetchProjectById = async (id: string) => {
   const response = await apiClient.get(`/projects/${id}`);
+  return response.data;
+};
+
+/** Load sample context from backend (dataset/emails/emails.csv) for Demo. */
+export const fetchDemoContext = async (): Promise<{ context_data: string }> => {
+  const response = await apiClient.get<{ context_data: string }>('/demo-context');
+  return response.data;
+};
+
+export const updateProjectTitle = async (projectId: string, title: string): Promise<{ ok: boolean; title: string }> => {
+  const response = await apiClient.patch(`/projects/${projectId}`, { title: title.trim() });
   return response.data;
 };
 

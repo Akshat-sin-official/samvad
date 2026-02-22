@@ -8,3 +8,6 @@ requests
 firebase-admin
 pyotp
 qrcode
+
+# Optional: Kaggle fallback when local dataset/emails/emails.csv is missing (USE_KAGGLE=1)
+# pip install kagglehub[pandas-datasets]

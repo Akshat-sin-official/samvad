@@ -29,6 +29,7 @@ app.include_router(generate.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 
+
 @app.get("/")
 def read_root():
     return {"message": "Autonomous BRD Agent API is running"}
